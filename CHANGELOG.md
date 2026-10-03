@@ -7,7 +7,7 @@ Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (
 ## 0.11.1
 - **Færre unødvendige skrivinger for «Effekt nå».** Live-strømmen leverer omtrent en måling hvert annet sekund. Før skrev «Effekt nå» ny tilstand for hver melding, også når din egen effektsensor var kilden og ingenting synlig endret seg. Nå skrives det bare når verdien, kilden eller status for live-strømmen endres. Har du ingen egen sensor, og live er kilden, skrives det fortsatt for hver endring i verdien.
 - Attributtet `amperium_live_kw` på «Effekt nå» er fjernet. Verdien finnes på sensoren «Effekt nå (Amperium live)». `source`, `local_entity`, `amperium_kw` og `live_status` er uendret.
-- Ikke testet i Home Assistant: valget om å skrive eller ikke ligger i sensorkoden. Det som avgjør det (`ChangeGate`) og kilde-rekkefølgen har automatiske tester. Se i Utviklerverktøy → Tilstander at «Effekt nå» fortsatt følger din egen sensor og at `source` stemmer.
+- **Verifisert i en ekte Home Assistant 3. oktober 2026** (én kjøring, 40 sekunders observasjon etter omstart, rapportert fra Home Assistant): «Effekt nå» fulgte Tibber Pulse med `source: local_sensor` og identiske verdier. «Effekt nå» ble oppdatert 5 ganger, like ofte som Tibber (5), mens live-strømmen mottok 20 meldinger (`messages` 3 til 23), altså uten en skriving per melding. Attributtene var `source`, `local_entity`, `amperium_kw` og `live_status`, og loggen viste ingen feil. Det som avgjør om det skrives (`ChangeGate`) og kilde-rekkefølgen har i tillegg automatiske tester.
 - 4 nye tester (116 totalt).
 
 ## 0.11.0

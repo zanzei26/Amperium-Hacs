@@ -79,7 +79,7 @@
         "name": "Export today"
       },
       "cost_yesterday": {
-        "name": "Energy cost yesterday"
+        "name": "Gross energy cost yesterday"
       },
       "subsidy_month": {
         "name": "Electricity subsidy this month"
@@ -113,6 +113,21 @@
           "no_data": "No data",
           "offline": "Offline"
         }
+      },
+      "energy_gross_month": {
+        "name": "Gross energy cost this month"
+      },
+      "vat_month": {
+        "name": "VAT on energy this month"
+      },
+      "net_norgespris_month": {
+        "name": "Net cost with Norgespris (approx.)"
+      },
+      "net_subsidy_month": {
+        "name": "Net cost with electricity subsidy (approx.)"
+      },
+      "norgespris_saves_month": {
+        "name": "Norgespris saves this month (approx.)"
       }
     },
     "binary_sensor": {

@@ -32,9 +32,14 @@ Sensorer per anlegg:
 | `sensor.*_forbruk_siste_time` | Forbruk siste hele time (kWh) |
 | `sensor.*_forbruk_forrige_maned` | Forbruk forrige måned (kWh) |
 | `sensor.*_forbruk_dag_denne_maneden` / `..._natt_...` | Forbruk dag og natt hittil i måneden (kWh), se «Dag og natt» |
-| `sensor.*_energikostnad_i_gar` | Energikostnad i går (kr), `totalAmount` fra timedata |
-| `sensor.*_straumstotte_denne_maneden` | Straumstøtte hittil i måneden (kr), som API-et oppgir |
-| `sensor.*_norgespris_kompensasjon_denne_maneden` | Norgespris-kompensasjon hittil i måneden (kr), som API-et oppgir |
+| `sensor.*_energikostnad_brutto_i_gar` | Brutto energikostnad i går (kr): (spot + påslag) × kWh inkl. mva, før støtte |
+| `sensor.*_energikostnad_brutto_denne_maneden` | Brutto energikostnad hittil i måneden (kr), summert fra timedata |
+| `sensor.*_mva_pa_energi_denne_maneden` | Mva-delen av energikostnaden hittil i måneden (kr) |
+| `sensor.*_straumstotte_denne_maneden` | Straumstøtte hittil i måneden (kr), trekkes fra bruttoen |
+| `sensor.*_norgespris_kompensasjon_denne_maneden` | Norgespris-kompensasjon hittil i måneden (kr), trekkes fra bruttoen |
+| `sensor.*_netto_kostnad_med_norgespris_ca` | Total kostnad (energi + nettleie) minus Norgespris-kompensasjon (kr, ca.) |
+| `sensor.*_netto_kostnad_med_straumstotte_ca` | Total kostnad minus straumstøtte (kr, ca.) |
+| `sensor.*_norgespris_sparer_denne_maneden_ca` | Norgespris-kompensasjon minus straumstøtte hittil i måneden (kr, ca.) |
 | `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
 | `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
 | `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
@@ -56,11 +61,22 @@ Integrasjonen importerer **timeforbruk** (og energikostnad, og eksport hvis du h
 Noen ting å vite:
 - Statistikken fylles ut for forrige og inneværende måned første gang. Eldre historikk importeres ikke.
 - Tallene kommer med forsinkelse fra Amperium (HAN-måleren oppdateres time for time), så siste time kan mangle en stund.
-- `Amperium energikostnad` er `totalAmount` fra Amperiums timedata. Det er ikke verifisert mot fakturaen, og det er uklart om nettleie er med. Sjekk mot en faktura før du stoler på den.
+- `Amperium energikostnad (brutto)` er brutto energikostnad (spot + påslag inkl. mva) **før** straumstøtte/Norgespris, og **uten nettleie**. Nettleie finnes bare i månedstallene fra `/api/sites`.
 
 ### Forbruk og pris per time (graf)
 
 «Forbruk siste time» har attributtet `consumption_today` (en rad per hele time i dag), og «Spotpris nå» har `prices_today`. Eksempelet [`examples/lovelace-forbruk-og-pris.yaml`](examples/lovelace-forbruk-og-pris.yaml) viser forbruk som søyler og pris som linje med HACS-kortet apexcharts-card. Eksempelet er ikke testet.
+
+### Kostnad: brutto, støtte og netto
+
+Amperium oppgir kostnaden i flere deler, og de må ikke blandes:
+
+- **Brutto energi** = (spot + påslag) × kWh inkludert mva, før støtte. Mva-delen er egen sensor.
+- **Nettleie** og **brutto total** (energi + nettleie) kommer fra månedstallene og finnes som egne sensorer.
+- **Straumstøtte** og **Norgespris-kompensasjon** er to separate beløp som trekkes fra bruttoen. Amperium regner ut begge, så du ser hva hver ordning gir uavhengig av hvilken du er på.
+- **Netto** = brutto total minus kompensasjon. Det er to netto-sensorer, én per ordning. Den som gjelder deg, er den du faktisk er på.
+
+Netto og «sparer» er **omtrentlige**: bruttoen kommer fra månedstallene, mens kompensasjonen summeres fra hele timer, og enkelte timer kan mangle eller være delvis tidlig i måneden. Bruk dem som peiling, ikke som faktura, før måneden er ferdig.
 
 ### Dag og natt
 

@@ -79,7 +79,7 @@
         "name": "Eksport i dag"
       },
       "cost_yesterday": {
-        "name": "Energikostnad i går"
+        "name": "Energikostnad brutto i går"
       },
       "subsidy_month": {
         "name": "Straumstøtte denne måneden"
@@ -113,6 +113,21 @@
           "no_data": "Ingen data",
           "offline": "Ikke på nett"
         }
+      },
+      "energy_gross_month": {
+        "name": "Energikostnad brutto denne måneden"
+      },
+      "vat_month": {
+        "name": "Mva på energi denne måneden"
+      },
+      "net_norgespris_month": {
+        "name": "Netto kostnad med Norgespris (ca.)"
+      },
+      "net_subsidy_month": {
+        "name": "Netto kostnad med straumstøtte (ca.)"
+      },
+      "norgespris_saves_month": {
+        "name": "Norgespris sparer denne måneden (ca.)"
       }
     },
     "binary_sensor": {

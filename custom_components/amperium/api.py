@@ -216,7 +216,10 @@ class AmperiumClient:
     async def async_get_charges(
         self, site_id: int, start: datetime.datetime, end: datetime.datetime
     ) -> list[dict[str, Any]]:
-        """Return hourly charges for [start, end) (resolution=H)."""
+        """Return hourly charges for [start, end) (resolution=H).
+
+        Grid rent is not part of this endpoint; it only exists in /api/sites.
+        """
         path = (
             f"/api/sites/{site_id}/consumption/charges"
             f"?from={_iso_z(start)}&to={_iso_z(end)}&resolution=H"
@@ -230,7 +233,11 @@ class AmperiumClient:
             {
                 "start": _parse_dt(b.get("from")),
                 "end": _parse_dt(b.get("to")),
-                "total": _num(b.get("totalAmount")),
+                # Gross energy cost incl. VAT, before any subsidy (kr).
+                # totalAmount carries the same number; spotCostPrice and
+                # surchargePrice are prices per kWh, not amounts.
+                "energy": _num(b.get("importedEnergyAmount")),
+                "tax": _num(b.get("salesTaxAmount")),
                 "subsidy": _num(b.get("importedCompensationAmount")),
                 "norgespris": _num(b.get("importedCompensationAmountNorgespris")),
             }

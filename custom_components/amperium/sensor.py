@@ -20,7 +20,12 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import AmperiumConfigEntry
 from .const import CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
 from .coordinator import AmperiumCoordinator
-from .derived import SIGNAL_STATES, han_signal_state
+from .derived import (
+    SIGNAL_STATES,
+    compensation_difference,
+    han_signal_state,
+    net_amount,
+)
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -177,6 +182,53 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         icon="mdi:cash-plus",
         suggested_display_precision=2,
         value_fn=lambda d: _round(d.get("norgespris_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="energy_gross_month",
+        translation_key="energy_gross_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("energy_gross_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="vat_month",
+        translation_key="vat_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:percent",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("vat_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="net_norgespris_month",
+        translation_key="net_norgespris_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-check",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            net_amount(d.get("cost_total"), d.get("norgespris_month")), 2
+        ),
+    ),
+    AmperiumSensorDescription(
+        key="net_subsidy_month",
+        translation_key="net_subsidy_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-check",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            net_amount(d.get("cost_total"), d.get("subsidy_month")), 2
+        ),
+    ),
+    AmperiumSensorDescription(
+        key="norgespris_saves_month",
+        translation_key="norgespris_saves_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:scale-balance",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            compensation_difference(d.get("norgespris_month"), d.get("subsidy_month")),
+            2,
+        ),
     ),
     AmperiumSensorDescription(
         key="norgespris_minus_subsidy",

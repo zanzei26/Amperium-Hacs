@@ -114,6 +114,6 @@ async def async_import_statistics(
             energy, "export", now,
         )
     await _import_series(
-        hass, f"{prefix}_energy_cost", "Amperium energikostnad", CURRENCY_UNIT, None,
-        charges, "total", now,
+        hass, f"{prefix}_energy_cost", "Amperium energikostnad (brutto)", CURRENCY_UNIT,
+        None, charges, "energy", now,
     )

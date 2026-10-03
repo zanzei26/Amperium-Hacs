@@ -131,23 +131,41 @@ def summarise_charges(
     yesterday = (now_local - dt.timedelta(days=1)).date()
 
     out: dict[str, Any] = {}
-    cost = subsidy = norgespris = 0.0
+    cost = gross = tax = subsidy = norgespris = 0.0
     have_cost = have_month = False
     for bucket in hours:
         local = bucket["start"].astimezone(tz)
         if local.date() == yesterday:
-            cost += bucket["total"]
+            cost += bucket["energy"]
             have_cost = True
         if (local.year, local.month) == (this_start.year, this_start.month):
+            gross += bucket["energy"]
+            tax += bucket["tax"]
             subsidy += bucket["subsidy"]
             norgespris += bucket["norgespris"]
             have_month = True
     if have_cost:
         out["cost_yesterday"] = cost
     if have_month:
+        out["energy_gross_month"] = gross
+        out["vat_month"] = tax
         out["subsidy_month"] = subsidy
         out["norgespris_month"] = norgespris
     return out
+
+
+def net_amount(gross_total: Any, compensation: Any) -> float | None:
+    """Gross total (energy + grid rent) minus a compensation amount."""
+    if gross_total is None or compensation is None:
+        return None
+    return float(gross_total) - float(compensation)
+
+
+def compensation_difference(norgespris: Any, subsidy: Any) -> float | None:
+    """How much more Norgespris compensates than the regular subsidy."""
+    if norgespris is None or subsidy is None:
+        return None
+    return float(norgespris) - float(subsidy)
 
 
 def build_hourly_statistics(

@@ -1,6 +1,6 @@
 {
   "domain": "amperium",
-  "name": "Amperium",
+  "name": "Finnås Kraftlag (Amperium)",
   "codeowners": ["@zanzei26"],
   "config_flow": true,
   "documentation": "https://github.com/zanzei26/Amperium-Hacs",

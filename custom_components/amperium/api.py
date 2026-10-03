@@ -7,7 +7,7 @@ from typing import Any
 
 import aiohttp
 
-from .const import API_KEY, BASE_URL, REQUEST_TIMEOUT
+from .const import ACCEPT_LANGUAGE, API_KEY, BASE_URL, REQUEST_TIMEOUT, USER_AGENT
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -56,7 +56,12 @@ class AmperiumClient:
         auth: bool = False,
     ) -> tuple[int, Any]:
         """Perform a single HTTP request. Returns (status, parsed_json|None)."""
-        headers = {"api-key": API_KEY, "Accept": "application/json"}
+        headers = {
+            "api-key": API_KEY,
+            "Accept": "application/json",
+            "Accept-Language": ACCEPT_LANGUAGE,
+            "User-Agent": USER_AGENT,
+        }
         if auth and self.access_token:
             headers["Authorization"] = f"Bearer {self.access_token}"
 

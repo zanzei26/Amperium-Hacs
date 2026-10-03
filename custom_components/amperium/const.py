@@ -12,6 +12,15 @@ BASE_URL = "https://api.amperium.cloud"
 # per-user OTP access token.
 API_KEY = "pu8egmI9SwiQ7vmnrJ49OyF01s2JAZa4MA640HzsXSs="
 
+# The official Android app (2.3.0, versionCode 34) identifies itself with the
+# header `User-Agent: AmperiumApp/<versionName> (+<platform> ...)`. The server
+# can reject unsupported app versions ("Upgrade required"), so we send the
+# same product/version. Bump APP_VERSION if Amperium starts rejecting it.
+APP_NAME = "AmperiumApp"
+APP_VERSION = "2.3.0"
+USER_AGENT = f"{APP_NAME}/{APP_VERSION} (+Home Assistant integration)"
+ACCEPT_LANGUAGE = "nb-NO"
+
 # Config entry data keys
 CONF_PHONE = "phone"
 CONF_ACCESS_TOKEN = "access_token"

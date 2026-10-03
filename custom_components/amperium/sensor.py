@@ -36,6 +36,7 @@ from .const import (
 from .coordinator import AmperiumCoordinator
 from .derived import (
     SIGNAL_STATES,
+    ChangeGate,
     choose_power_now,
     compensation_difference,
     compensation_for_scheme,
@@ -563,7 +564,6 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             "source",
             "local_entity",
             "amperium_kw",
-            "amperium_live_kw",
             "live_status",
         }
     )
@@ -582,6 +582,8 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         is_power_now = description.key == "power_now"
         self._tracker = tracker if is_power_now else None
         self._live_state = live_state if is_power_now else None
+        # Remembers what "power now" last showed, to skip writes that repeat it.
+        self._gate = ChangeGate()
         site_id = entry.data[CONF_SITE_ID]
         site_name = entry.data.get(CONF_SITE_NAME) or f"Site {site_id}"
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
@@ -599,10 +601,31 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             self.async_on_remove(self._tracker.add_listener(self._handle_local_update))
         if self._live_state is not None:
             self.async_on_remove(self._live_state.add_listener(self._handle_local_update))
+        if self.entity_description.key == "power_now":
+            self._gate.changed(self._signature())  # what the first write shows
 
     @callback
     def _handle_local_update(self) -> None:
-        self.async_write_ha_state()
+        """Write only when what "power now" shows has changed.
+
+        The live feed delivers about one reading every two seconds. When the own
+        sensor is the source, those readings change nothing that is shown.
+        """
+        if self._gate.changed(self._signature()):
+            self.async_write_ha_state()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Write as usual, and remember what "power now" shows."""
+        super()._handle_coordinator_update()
+        if self.entity_description.key == "power_now":
+            self._gate.changed(self._signature())
+
+    def _signature(self) -> tuple[Any, ...]:
+        """What "power now" shows: value, source and live feed status."""
+        value, source = self._power_now()
+        status = self._live_state.status if self._live_state is not None else "off"
+        return (_round(value, 3), source, status)
 
     def _power_now(self) -> tuple[float | None, str | None]:
         """Power now in kW and its source: local sensor, Amperium live, then Amperium hourly."""
@@ -633,11 +656,6 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
                 "source": self._power_now()[1],
                 "local_entity": self._tracker.entity_id if self._tracker else None,
                 "amperium_kw": _round((self.coordinator.data or {}).get("power_now"), 3),
-                "amperium_live_kw": (
-                    self._live_state.current_kw(dt_util.utcnow())
-                    if self._live_state is not None
-                    else None
-                ),
                 "live_status": self._live_state.status if self._live_state else "off",
             }
         data = self.coordinator.data

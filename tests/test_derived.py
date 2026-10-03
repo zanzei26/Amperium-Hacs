@@ -912,3 +912,40 @@ def test_aio_pika_glue_without_tls_uses_the_plain_port_and_no_context(monkeypatc
     asyncio.run(go())
     assert seen["port"] == 5672 and seen["ssl"] is False and seen["ssl_context"] is None
     assert seen["virtualhost"] == "/"
+
+
+# --- skip state writes that repeat what is shown ------------------------------------------
+def test_change_gate_first_value_counts_then_repeats_do_not():
+    gate = derived.ChangeGate()
+    assert gate.changed((1.2, "local_sensor", "connected")) is True   # first: write
+    assert gate.changed((1.2, "local_sensor", "connected")) is False  # same: skip
+    assert gate.changed((1.3, "local_sensor", "connected")) is True   # value changed
+    assert gate.changed((1.3, "local_sensor", "connected")) is False
+
+
+def test_change_gate_treats_none_and_zero_as_values():
+    gate = derived.ChangeGate()
+    assert gate.changed((None, None, "off")) is True      # None is a value too
+    assert gate.changed((None, None, "off")) is False
+    assert gate.changed((0.0, "amperium_live", "connected")) is True
+    assert gate.changed((0.0, "amperium_live", "connected")) is False
+
+
+def test_live_messages_do_not_cause_writes_while_the_own_sensor_is_shown():
+    """The live feed sends a reading every ~2 s; with an own sensor that changes nothing shown."""
+    gate = derived.ChangeGate()
+    writes = 0
+    for live_kw in (1.201, 1.200, 1.200, 1.199, 1.201):   # five live messages
+        shown = derived.choose_power_now(1.2, 0.0, live_kw)   # own sensor steady at 1.2 kW
+        if gate.changed((shown[0], shown[1], "connected")):
+            writes += 1
+    assert writes == 1  # only the very first one
+
+
+def test_a_stale_live_feed_changes_what_is_shown_and_is_written():
+    gate = derived.ChangeGate()
+    live = derived.choose_power_now(None, 0.0, 1.2)           # live is the source
+    assert gate.changed((live[0], live[1], "connected")) is True
+    gone = derived.choose_power_now(None, 0.4, None)          # live went stale -> hourly value
+    assert gate.changed((gone[0], gone[1], "connected")) is True
+    assert gone == (0.4, "amperium")

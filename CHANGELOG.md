@@ -4,6 +4,12 @@ Nyeste versjon øverst. Versjonsnummeret står i `custom_components/amperium/man
 
 Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (`api.py`) har automatiske tester som kjøres uten Home Assistant (`cd tests && python -m pytest`). Sensorer, oppsettsflyt, varsler og statistikkimport er skrevet mot Home Assistants API, men er ikke kjørt i en ekte Home Assistant av den som har skrevet koden. Meld fra under Issues hvis noe ikke virker.
 
+## 0.11.1
+- **Færre unødvendige skrivinger for «Effekt nå».** Live-strømmen leverer omtrent en måling hvert annet sekund. Før skrev «Effekt nå» ny tilstand for hver melding, også når din egen effektsensor var kilden og ingenting synlig endret seg. Nå skrives det bare når verdien, kilden eller status for live-strømmen endres. Har du ingen egen sensor, og live er kilden, skrives det fortsatt for hver endring i verdien.
+- Attributtet `amperium_live_kw` på «Effekt nå» er fjernet. Verdien finnes på sensoren «Effekt nå (Amperium live)». `source`, `local_entity`, `amperium_kw` og `live_status` er uendret.
+- Ikke testet i Home Assistant: valget om å skrive eller ikke ligger i sensorkoden. Det som avgjør det (`ChangeGate`) og kilde-rekkefølgen har automatiske tester. Se i Utviklerverktøy → Tilstander at «Effekt nå» fortsatt følger din egen sensor og at `source` stemmer.
+- 4 nye tester (116 totalt).
+
 ## 0.11.0
 - **Live effekt fra Amperium for deg med Dobbe-modul (eksperimentell, avslått som standard).** Ved oppsett kommer et nytt steg der du velger om du har en Dobbe-modul (HAN-sensoren som sender målingene til Amperium). Du kan endre valget senere under «Konfigurer» («Jeg har en Dobbe-modul»). Eksisterende installasjoner får «nei». Svarer du ja, kobler integrasjonen til samme sanntidsstrøm som live-visningen i appen (RabbitMQ/AMQP) og gir den nye sensoren «Effekt nå (Amperium live)». Svarer du nei, skjer ingenting av dette, og biblioteket installeres ikke. «Effekt nå» bruker nå denne rekkefølgen: din egen effektsensor, så Amperium live (hvis siste måling er under to minutter gammel), så Amperiums timeverdi.
 - **Hvorfor:** Feltet `currentActivePowerImport` i `/api/sites` er ikke live (0,0 kW hos en ekte konto mens huset brukte ca. 1,35 kW). En test fra Home Assistant 3. oktober viste også at selve HTTP-kallet `POST /api/sites/{id}/stream/amqp` ga en tom liste med målinger. Live-verdiene kommer som meldinger på køen i svaret.

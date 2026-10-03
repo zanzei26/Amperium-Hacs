@@ -55,6 +55,26 @@ def choose_power_now(
     return None, None
 
 
+class ChangeGate:
+    """Say whether a value differs from the last one it was asked about.
+
+    Used to skip state writes that would repeat what is already shown.
+    """
+
+    _UNSET = object()
+
+    def __init__(self) -> None:
+        """Start with nothing remembered, so the first value always counts as changed."""
+        self._last: Any = self._UNSET
+
+    def changed(self, value: Any) -> bool:
+        """Remember ``value``; True unless it equals the previous one."""
+        if self._last is not self._UNSET and value == self._last:
+            return False
+        self._last = value
+        return True
+
+
 def days_until(timestamp: Any, now: dt.datetime) -> float | None:
     """Days from ``now`` until an ISO-8601 timestamp (None if unknown/invalid)."""
     if not isinstance(timestamp, str):

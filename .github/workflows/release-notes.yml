@@ -1,0 +1,41 @@
+name: Release notes from changelog
+
+# Manual run. Gives every existing release that only has GitHub's generated
+# "Full Changelog" link the matching section of CHANGELOG.md as notes, and keeps
+# that link underneath. Releases with their own notes are left alone.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fill in the notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          for tag in $(gh release list --limit 200 --json tagName -q '.[].tagName'); do
+            version="${tag#v}"
+            body="$(gh release view "$tag" --json body -q .body)"
+            case "$body" in
+              "**Full Changelog**"*) ;;
+              *) echo "$tag: has its own notes, left alone"; continue ;;
+            esac
+            awk -v v="${version}" '
+              index($0, "## " v) == 1 && (length($0) == length("## " v) || substr($0, length("## " v) + 1, 1) == " ") { found = 1; next }
+              found && /^## / { exit }
+              found { print }
+            ' CHANGELOG.md > notes.md
+            if ! grep -q '[^[:space:]]' notes.md; then
+              echo "$tag: no CHANGELOG section, left alone"
+              continue
+            fi
+            printf '\n%s\n' "${body}" >> notes.md
+            gh release edit "$tag" --notes-file notes.md
+            echo "$tag: notes updated"
+          done

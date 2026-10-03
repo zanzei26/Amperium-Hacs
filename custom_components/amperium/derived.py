@@ -161,6 +161,17 @@ def net_amount(gross_total: Any, compensation: Any) -> float | None:
     return float(gross_total) - float(compensation)
 
 
+def compensation_for_scheme(scheme: Any, norgespris: Any, subsidy: Any) -> float | None:
+    """Return the compensation amount for the chosen scheme (None if unset)."""
+    if scheme == "norgespris":
+        value = norgespris
+    elif scheme == "subsidy":
+        value = subsidy
+    else:
+        return None
+    return None if value is None else float(value)
+
+
 def compensation_difference(norgespris: Any, subsidy: Any) -> float | None:
     """How much more Norgespris compensates than the regular subsidy."""
     if norgespris is None or subsidy is None:

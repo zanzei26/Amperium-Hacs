@@ -31,6 +31,14 @@ CONF_SITE_NAME = "site_name"
 # How often to poll the API (seconds). The HAN meter data updates hourly.
 DEFAULT_SCAN_INTERVAL = 900
 
+# Which compensation scheme the customer is on: Norgespris or the regular
+# electricity subsidy (straumstotte). Decides which amount the net cost uses.
+# No default: it is asked for at setup and can be changed in the options.
+CONF_SCHEME = "scheme"
+SCHEME_NORGESPRIS = "norgespris"
+SCHEME_SUBSIDY = "subsidy"
+SCHEMES = [SCHEME_NORGESPRIS, SCHEME_SUBSIDY]
+
 # Hours (local time) counted as "day" for the day/night consumption split.
 # Configurable in the integration options. Weekends are not treated specially.
 CONF_DAY_START = "day_start"

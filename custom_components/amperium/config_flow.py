@@ -9,6 +9,11 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.selector import (
+    SelectSelector,
+    SelectSelectorConfig,
+    SelectSelectorMode,
+)
 
 from .api import (
     AmperiumAuthError,
@@ -22,11 +27,13 @@ from .const import (
     CONF_DAY_START,
     CONF_PHONE,
     CONF_REFRESH_TOKEN,
+    CONF_SCHEME,
     CONF_SITE_ID,
     CONF_SITE_NAME,
     DEFAULT_DAY_END,
     DEFAULT_DAY_START,
     DOMAIN,
+    SCHEMES,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -42,6 +49,7 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._phone: str | None = None
         self._client: AmperiumClient | None = None
         self._sites: list[dict[str, Any]] = []
+        self._site: dict[str, Any] | None = None
 
     @staticmethod
     @callback
@@ -105,7 +113,8 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
                 if not self._sites:
                     errors["base"] = "no_sites"
                 elif len(self._sites) == 1:
-                    return await self._create_entry(self._sites[0])
+                    self._site = self._sites[0]
+                    return await self.async_step_scheme()
                 else:
                     return await self.async_step_site()
 
@@ -127,7 +136,8 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
             site = next(
                 s for s in self._sites if str(s.get("siteId")) == user_input[CONF_SITE_ID]
             )
-            return await self._create_entry(site)
+            self._site = site
+            return await self.async_step_scheme()
 
         options = {
             str(s.get("siteId")): (s.get("siteName") or f"Site {s.get('siteId')}")
@@ -139,9 +149,25 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     # ------------------------------------------------------------------ #
+    # Step 4: Norgespris or electricity subsidy (decides the net cost)
+    # ------------------------------------------------------------------ #
+    async def async_step_scheme(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask which compensation scheme the customer is on."""
+        assert self._site is not None
+        if user_input is not None:
+            return await self._create_entry(self._site, user_input[CONF_SCHEME])
+
+        return self.async_show_form(
+            step_id="scheme",
+            data_schema=vol.Schema({vol.Required(CONF_SCHEME): _scheme_selector()}),
+        )
+
+    # ------------------------------------------------------------------ #
     # Finish
     # ------------------------------------------------------------------ #
-    async def _create_entry(self, site: dict[str, Any]) -> ConfigFlowResult:
+    async def _create_entry(self, site: dict[str, Any], scheme: str) -> ConfigFlowResult:
         """Create (or update) the config entry for the chosen site."""
         assert self._client is not None
         site_id = site.get("siteId")
@@ -159,6 +185,7 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_SITE_ID: site_id,
                 CONF_SITE_NAME: site_name,
             },
+            options={CONF_SCHEME: scheme},
         )
 
 
@@ -186,6 +213,9 @@ class AmperiumOptionsFlow(OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(
+                        CONF_SCHEME, default=current.get(CONF_SCHEME, vol.UNDEFINED)
+                    ): _scheme_selector(),
+                    vol.Required(
                         CONF_DAY_START,
                         default=current.get(CONF_DAY_START, DEFAULT_DAY_START),
                     ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
@@ -197,6 +227,17 @@ class AmperiumOptionsFlow(OptionsFlow):
             ),
             errors=errors,
         )
+
+
+def _scheme_selector() -> SelectSelector:
+    """Dropdown with the two compensation schemes (labels come from translations)."""
+    return SelectSelector(
+        SelectSelectorConfig(
+            options=SCHEMES,
+            mode=SelectSelectorMode.DROPDOWN,
+            translation_key="scheme",
+        )
+    )
 
 
 def _normalise_phone(raw: str) -> str:

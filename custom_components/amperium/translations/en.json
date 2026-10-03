@@ -21,6 +21,13 @@
         "data": {
           "site_id": "Site"
         }
+      },
+      "scheme": {
+        "title": "Compensation scheme",
+        "description": "Which scheme are you on? Net cost uses the amount for this scheme. Both amounts are still shown.",
+        "data": {
+          "scheme": "Scheme"
+        }
       }
     },
     "error": {
@@ -46,10 +53,10 @@
         "name": "Power now"
       },
       "cost_total": {
-        "name": "Cost this month"
+        "name": "Total cost gross this month (energy + grid rent)"
       },
       "cost_energy": {
-        "name": "Energy cost this month"
+        "name": "Energy cost gross this month"
       },
       "cost_grid_rent": {
         "name": "Grid rent this month"
@@ -115,7 +122,7 @@
         }
       },
       "energy_gross_month": {
-        "name": "Gross energy cost this month"
+        "name": "Energy cost gross this month (summed from hourly data)"
       },
       "vat_month": {
         "name": "VAT on energy this month"
@@ -128,6 +135,21 @@
       },
       "norgespris_saves_month": {
         "name": "Norgespris saves this month (approx.)"
+      },
+      "cost_energy_last_month": {
+        "name": "Energy cost gross last month"
+      },
+      "cost_grid_rent_last_month": {
+        "name": "Grid rent last month"
+      },
+      "cost_last_month": {
+        "name": "Total cost gross last month (energy + grid rent)"
+      },
+      "compensation_month": {
+        "name": "Compensation this month (your scheme)"
+      },
+      "net_cost_month": {
+        "name": "Net cost this month (approx.)"
       }
     },
     "binary_sensor": {
@@ -143,12 +165,21 @@
         "description": "Local hours counted as day. All other hours count as night. Weekends and holidays are not treated specially.",
         "data": {
           "day_start": "Day starts (hour, 0-23)",
-          "day_end": "Day ends (hour, 1-24)"
+          "day_end": "Day ends (hour, 1-24)",
+          "scheme": "Scheme"
         }
       }
     },
     "error": {
       "invalid_day_hours": "Day must start before it ends."
+    }
+  },
+  "selector": {
+    "scheme": {
+      "options": {
+        "norgespris": "Norgespris",
+        "subsidy": "Electricity subsidy"
+      }
     }
   }
 }

@@ -21,9 +21,10 @@ Sensorer per anlegg:
 | `sensor.*_forbruk_denne_maneden` | Forbruk hittil i måneden (kWh) |
 | `sensor.*_forbruk_i_dag` | Forbruk i dag (kWh) |
 | `sensor.*_effekt_na` | Effekt nå (kW) |
-| `sensor.*_kostnad_denne_maneden` | Total kostnad hittil i måneden (kr) |
-| `sensor.*_energikostnad_denne_maneden` | Energidelen av kostnaden (kr) |
+| `sensor.*_kostnad_denne_maneden` | Total brutto kostnad hittil i måneden: energi + nettleie, før støtte (kr) |
+| `sensor.*_energikostnad_denne_maneden` | Energidelen av kostnaden, brutto (kr) |
 | `sensor.*_nettleie_denne_maneden` | Nettleie hittil i måneden (kr) |
+| `sensor.*_nettleie_forrige_maned`, `..._energikostnad_..._forrige_maned`, `..._kostnad_..._forrige_maned` | Samme tre tallene for forrige måned (kr) |
 | `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh) |
 | `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen som attributt |
 | `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen som attributt |
@@ -37,8 +38,9 @@ Sensorer per anlegg:
 | `sensor.*_mva_pa_energi_denne_maneden` | Mva-delen av energikostnaden hittil i måneden (kr) |
 | `sensor.*_straumstotte_denne_maneden` | Straumstøtte hittil i måneden (kr), trekkes fra bruttoen |
 | `sensor.*_norgespris_kompensasjon_denne_maneden` | Norgespris-kompensasjon hittil i måneden (kr), trekkes fra bruttoen |
-| `sensor.*_netto_kostnad_med_norgespris_ca` | Total kostnad (energi + nettleie) minus Norgespris-kompensasjon (kr, ca.) |
-| `sensor.*_netto_kostnad_med_straumstotte_ca` | Total kostnad minus straumstøtte (kr, ca.) |
+| `sensor.*_kompensasjon_denne_maneden_din_ordning` | Kompensasjon for ordningen du har valgt (Norgespris eller straumstøtte) (kr) |
+| `sensor.*_netto_kostnad_denne_maneden_ca` | Total kostnad (energi + nettleie) minus kompensasjon for din ordning (kr, ca.) |
+| `sensor.*_netto_kostnad_med_norgespris_ca` / `..._med_straumstotte_ca` | Netto for hver ordning, avslått som standard |
 | `sensor.*_norgespris_sparer_denne_maneden_ca` | Norgespris-kompensasjon minus straumstøtte hittil i måneden (kr, ca.) |
 | `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
 | `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
@@ -72,9 +74,10 @@ Noen ting å vite:
 Amperium oppgir kostnaden i flere deler, og de må ikke blandes:
 
 - **Brutto energi** = (spot + påslag) × kWh inkludert mva, før støtte. Mva-delen er egen sensor.
-- **Nettleie** og **brutto total** (energi + nettleie) kommer fra månedstallene og finnes som egne sensorer.
+- **Nettleie** og **brutto total** (energi + nettleie) kommer fra månedstallene og finnes som egne sensorer, også for forrige måned. Nettleie oppgis bare per måned, ikke per dag eller time.
 - **Straumstøtte** og **Norgespris-kompensasjon** er to separate beløp som trekkes fra bruttoen. Amperium regner ut begge, så du ser hva hver ordning gir uavhengig av hvilken du er på.
-- **Netto** = brutto total minus kompensasjon. Det er to netto-sensorer, én per ordning. Den som gjelder deg, er den du faktisk er på.
+- **Total** = energi + nettleie, før støtte. Eksempelkortet [`examples/lovelace-kostnad.yaml`](examples/lovelace-kostnad.yaml) viser energi og nettleie hver for seg, så total, støtte og netto.
+- **Netto** = brutto total minus kompensasjon. Du velger ordningen (Norgespris eller straumstøtte) når du setter opp integrasjonen, og kan endre den under **Konfigurer**. Netto-sensoren bruker beløpet for ordningen du har valgt. Har du ikke valgt (eldre installasjon), er den utilgjengelig til du velger. Netto for hver ordning finnes også som egne sensorer som er avslått som standard.
 
 Netto og «sparer» er **omtrentlige**: bruttoen kommer fra månedstallene, mens kompensasjonen summeres fra hele timer, og enkelte timer kan mangle eller være delvis tidlig i måneden. Bruk dem som peiling, ikke som faktura, før måneden er ferdig.
 

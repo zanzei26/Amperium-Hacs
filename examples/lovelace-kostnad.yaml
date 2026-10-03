@@ -1,0 +1,43 @@
+# Kostnadsoversikt: energi og nettleie hver for seg, total til slutt,
+# deretter støtte og netto. Bruker bare innebygde kort.
+# Ikke testet i Home Assistant.
+#
+# Bytt entitets-ID-ene med dine egne (Utviklerverktøy → Tilstander → søk "amperium").
+# ID-ene inneholder anleggsnavnet ditt; plassholderne under er forkortet.
+#
+# Merk: nettleie finnes bare som månedstall (ikke per dag/time) fra Amperium.
+# Netto og «sparer» er omtrentlige, se README.
+
+type: entities
+title: Kostnad denne måneden
+state_color: true
+entities:
+  - entity: sensor.amperium_energikostnad_brutto_denne_maneden
+    name: Energi (brutto, inkl. mva)
+  - entity: sensor.amperium_nettleie_denne_maneden
+    name: Nettleie
+  - type: divider
+  - entity: sensor.amperium_total_kostnad_brutto_denne_maneden_energi_nettleie
+    name: Total brutto (energi + nettleie)
+  - type: divider
+  - entity: sensor.amperium_kompensasjon_denne_maneden_din_ordning
+    name: − Kompensasjon (din ordning)
+  - type: divider
+  - entity: sensor.amperium_netto_kostnad_denne_maneden_ca
+    name: Netto (ca.)
+  - type: divider
+  - entity: sensor.amperium_norgespris_kompensasjon_denne_maneden
+    name: Til sammenligning, Norgespris
+  - entity: sensor.amperium_straumstotte_denne_maneden
+    name: Til sammenligning, straumstøtte
+  - type: divider
+  - entity: sensor.amperium_mva_pa_energi_denne_maneden
+    name: Herav mva på energi
+  - type: section
+    label: Forrige måned
+  - entity: sensor.amperium_energikostnad_brutto_forrige_maned
+    name: Energi (brutto)
+  - entity: sensor.amperium_nettleie_forrige_maned
+    name: Nettleie
+  - entity: sensor.amperium_total_kostnad_brutto_forrige_maned_energi_nettleie
+    name: Total brutto

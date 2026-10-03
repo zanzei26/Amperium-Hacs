@@ -18,6 +18,7 @@ from .const import (
     CONF_DAY_END,
     CONF_DAY_START,
     CONF_REFRESH_TOKEN,
+    CONF_SCHEME,
     CONF_SITE_ID,
     DEFAULT_DAY_END,
     DEFAULT_DAY_START,
@@ -64,6 +65,7 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except AmperiumError as err:
             raise UpdateFailed(str(err)) from err
 
+        data["scheme"] = self.entry.options.get(CONF_SCHEME)
         data.update(await self._async_fetch_prices())
         data.update(await self._async_fetch_extended(bool(data.get("is_producing"))))
 
@@ -168,6 +170,15 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise
             except AmperiumError as err:
                 _LOGGER.debug("Could not fetch Norgespris comparison: %s", err)
+            last_charges = None
+            try:
+                last_charges = await client.async_get_site_charges(
+                    site, prev_start, this_start
+                )
+            except AmperiumAuthError:
+                raise
+            except AmperiumError as err:
+                _LOGGER.debug("Could not fetch last month's charges: %s", err)
         except AmperiumAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
 
@@ -176,6 +187,10 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         new: dict[str, Any] = {}
         new.update(summarise_energy(energy, now, tz, day_start, day_end))
         new.update(summarise_charges(charges, now, tz))
+        if last_charges:
+            new["cost_energy_last_month"] = last_charges["energy"]
+            new["cost_grid_rent_last_month"] = last_charges["grid_rent"]
+            new["cost_last_month"] = last_charges["total"]
         if norgespris is not None:
             new["norgespris_minus_subsidy"] = norgespris["norgespris_minus_subsidy"]
             new["norgespris_details"] = norgespris

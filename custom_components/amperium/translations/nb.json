@@ -21,6 +21,13 @@
         "data": {
           "site_id": "Anlegg"
         }
+      },
+      "scheme": {
+        "title": "Støtteordning",
+        "description": "Hvilken ordning er du på? Netto kostnad bruker beløpet for denne ordningen. Begge beløpene vises fortsatt.",
+        "data": {
+          "scheme": "Ordning"
+        }
       }
     },
     "error": {
@@ -46,10 +53,10 @@
         "name": "Effekt nå"
       },
       "cost_total": {
-        "name": "Kostnad denne måneden"
+        "name": "Total kostnad brutto denne måneden (energi + nettleie)"
       },
       "cost_energy": {
-        "name": "Energikostnad denne måneden"
+        "name": "Energikostnad brutto denne måneden"
       },
       "cost_grid_rent": {
         "name": "Nettleie denne måneden"
@@ -115,7 +122,7 @@
         }
       },
       "energy_gross_month": {
-        "name": "Energikostnad brutto denne måneden"
+        "name": "Energikostnad brutto denne måneden (timesummert)"
       },
       "vat_month": {
         "name": "Mva på energi denne måneden"
@@ -128,6 +135,21 @@
       },
       "norgespris_saves_month": {
         "name": "Norgespris sparer denne måneden (ca.)"
+      },
+      "cost_energy_last_month": {
+        "name": "Energikostnad brutto forrige måned"
+      },
+      "cost_grid_rent_last_month": {
+        "name": "Nettleie forrige måned"
+      },
+      "cost_last_month": {
+        "name": "Total kostnad brutto forrige måned (energi + nettleie)"
+      },
+      "compensation_month": {
+        "name": "Kompensasjon denne måneden (din ordning)"
+      },
+      "net_cost_month": {
+        "name": "Netto kostnad denne måneden (ca.)"
       }
     },
     "binary_sensor": {
@@ -143,12 +165,21 @@
         "description": "Timer (lokal tid) som regnes som dag. Alle andre timer regnes som natt. Helg og helligdager behandles ikke spesielt.",
         "data": {
           "day_start": "Dag starter (time, 0-23)",
-          "day_end": "Dag slutter (time, 1-24)"
+          "day_end": "Dag slutter (time, 1-24)",
+          "scheme": "Ordning"
         }
       }
     },
     "error": {
       "invalid_day_hours": "Dagen må starte før den slutter."
+    }
+  },
+  "selector": {
+    "scheme": {
+      "options": {
+        "norgespris": "Norgespris",
+        "subsidy": "Straumstøtte"
+      }
     }
   }
 }

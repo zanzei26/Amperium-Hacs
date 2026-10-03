@@ -23,6 +23,7 @@ from .coordinator import AmperiumCoordinator
 from .derived import (
     SIGNAL_STATES,
     compensation_difference,
+    compensation_for_scheme,
     han_signal_state,
     net_amount,
 )
@@ -184,6 +185,30 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: _round(d.get("norgespris_month"), 2),
     ),
     AmperiumSensorDescription(
+        key="cost_energy_last_month",
+        translation_key="cost_energy_last_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("cost_energy_last_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="cost_grid_rent_last_month",
+        translation_key="cost_grid_rent_last_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:transmission-tower",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("cost_grid_rent_last_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="cost_last_month",
+        translation_key="cost_last_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-multiple",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("cost_last_month"), 2),
+    ),
+    AmperiumSensorDescription(
         key="energy_gross_month",
         translation_key="energy_gross_month",
         native_unit_of_measurement="kr",
@@ -200,10 +225,40 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: _round(d.get("vat_month"), 2),
     ),
     AmperiumSensorDescription(
+        key="compensation_month",
+        translation_key="compensation_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            compensation_for_scheme(
+                d.get("scheme"), d.get("norgespris_month"), d.get("subsidy_month")
+            ),
+            2,
+        ),
+    ),
+    AmperiumSensorDescription(
+        key="net_cost_month",
+        translation_key="net_cost_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-check",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            net_amount(
+                d.get("cost_total"),
+                compensation_for_scheme(
+                    d.get("scheme"), d.get("norgespris_month"), d.get("subsidy_month")
+                ),
+            ),
+            2,
+        ),
+    ),
+    AmperiumSensorDescription(
         key="net_norgespris_month",
         translation_key="net_norgespris_month",
         native_unit_of_measurement="kr",
         icon="mdi:cash-check",
+        entity_registry_enabled_default=False,
         suggested_display_precision=2,
         value_fn=lambda d: _round(
             net_amount(d.get("cost_total"), d.get("norgespris_month")), 2
@@ -214,6 +269,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         translation_key="net_subsidy_month",
         native_unit_of_measurement="kr",
         icon="mdi:cash-check",
+        entity_registry_enabled_default=False,
         suggested_display_precision=2,
         value_fn=lambda d: _round(
             net_amount(d.get("cost_total"), d.get("subsidy_month")), 2

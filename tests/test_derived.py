@@ -1060,3 +1060,43 @@ def test_aio_pika_glue_still_works_when_the_library_has_no_cancel_hook(monkeypat
 
     asyncio.run(go())
     assert connection.closed is True
+
+
+# --- an old error must not stay on after the feed works again (real HA, 3 October 2026) ------
+def test_error_text_is_readable_when_the_exception_has_no_message():
+    assert amqp_feed._safe_error(TimeoutError(), []) == "TimeoutError (no details)"
+    assert amqp_feed._safe_error(TimeoutError("slow"), []) == "TimeoutError: slow"
+
+
+def test_last_error_is_cleared_when_readings_arrive_again_but_its_time_is_kept():
+    client = _FakeClient([TimeoutError(), _sub()])
+
+    async def consume(details, on_message):
+        on_message("MID.O.101", b'{"Value": 1200}')
+
+    feed, _ = _run_feed(client, consume, stop_after_sleeps=2)
+    assert feed.state.messages == 1
+    assert feed.state.last_error is None            # cleared by the first reading
+    assert feed.state.last_error_at is not None     # but we still know when it happened
+
+
+def test_last_error_stays_while_the_feed_is_still_failing():
+    client = _FakeClient([TimeoutError(), _sub()])
+
+    async def consume(details, on_message):
+        return None                                 # connects, but no readings arrive
+
+    feed, _ = _run_feed(client, consume, stop_after_sleeps=2)
+    assert feed.state.last_error == "TimeoutError (no details)"
+
+
+def test_a_single_failure_is_logged_quietly_and_a_repeated_one_as_a_warning(caplog):
+    client = _FakeClient([api.AmperiumError("HTTP 503"), api.AmperiumError("HTTP 503")])
+
+    async def consume(details, on_message):
+        raise AssertionError("never reached")
+
+    with caplog.at_level("INFO", logger="amperium.amqp_feed"):
+        _run_feed(client, consume, stop_after_sleeps=2)
+    levels = [r.levelname for r in caplog.records if "live feed" in r.getMessage()]
+    assert levels == ["INFO", "WARNING"]

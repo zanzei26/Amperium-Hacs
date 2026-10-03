@@ -4,10 +4,16 @@ Nyeste versjon øverst. Versjonsnummeret står i `custom_components/amperium/man
 
 Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (`api.py`) har automatiske tester som kjøres uten Home Assistant (`cd tests && python -m pytest`). Sensorer, oppsettsflyt, varsler og statistikkimport er skrevet mot Home Assistants API, men er ikke kjørt i en ekte Home Assistant av den som har skrevet koden. Meld fra under Issues hvis noe ikke virker.
 
+## 0.11.3
+- **Gammel feilmelding blir ikke stående.** Etter en kortvarig feil, for eksempel en `TimeoutError` under oppstart før nettverket er klart, sto `last_error` igjen på «Effekt nå (Amperium live)» i minutter etter at strømmen virket igjen. Nå nullstilles `last_error` når nye målinger kommer, så attributtet bare viser et problem som pågår. Nytt attributt `last_error_at` viser når siste feil skjedde.
+- En feil uten tekst vises som «TimeoutError (no details)» i stedet for «TimeoutError: ».
+- Første feil i en rekke logges på nivå info («trying again»). Gjentar den seg, logges den som advarsel. Før ble også en enkelt feil under oppstart logget som advarsel.
+- 4 nye tester (126 totalt). Token- og innloggingskoden er uendret.
+
 ## 0.11.2
 - **Rettet: live-strømmen stoppet etter ca. 10 minutter.** Rapport fra Home Assistant 3. oktober 2026: etter en omstart kom det en melding omtrent hvert 2. sekund i ca. 10 minutter (301 meldinger), så ingenting mer, mens `status` sto på `connected` uten feil. Etter 120 sekunder uten ny måling ble «Effekt nå (Amperium live)» `unknown`. Sannsynlig årsak: abonnementet (bedt om med 300 sekunders levetid) utløper hos Amperium, og meglerens kansellering av forbrukeren ble ikke fanget opp, fordi forbindelsen og kanalen står åpne uten feil. Den nøyaktige årsaken er ikke klarlagt (meldingene varte ca. 600 sekunder, ikke 300), så rettelsen dekker flere mulige årsaker.
 - **Tre rettelser:** (1) Integrasjonen tar nytt abonnement hvert 4. minutt, før det gamle utløper, med omtrent ett sekunds pause. (2) Hvis megleren kansellerer forbrukeren, avsluttes lyttingen med en gang og nytt abonnement tas. (3) Grensen for stillhet er kortet ned fra 10 minutter til 60 sekunder, siden måleren sender omtrent hvert 2. sekund.
-- Ikke testet i en ekte Home Assistant ennå: at forbindelsen holder seg over lengre tid. Se at «Effekt nå (Amperium live)» fortsatt får meldinger (`messages` øker, `age_seconds` er lav) mer enn 15 minutter etter oppdatering og omstart.
+- **Verifisert i en ekte Home Assistant 3. oktober 2026** (én kjøring): 15 minutters overvåking hvert 30. sekund etter omstart. `messages` gikk jevnt fra 129 til 577 (ca. 0,5 per sekund), `age_seconds` var 0 i alle 31 målingene, `status` var `connected` hele tiden, og strømmen holdt seg forbi punktet der den stoppet før (ca. 10 minutter) og gjennom flere fornyelser. Loggen hadde én `TimeoutError` under oppstarten, som rettet seg selv (se 0.11.3).
 - 6 nye tester (122 totalt): fornyelse før utløp, nullstilling av ventetiden etter feil, kansellert forbruker, og at tidsinnstillingene henger sammen. Token- og innloggingskoden er uendret.
 
 ## 0.11.1

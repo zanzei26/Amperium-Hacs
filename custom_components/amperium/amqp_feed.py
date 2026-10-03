@@ -97,7 +97,8 @@ class LiveFeedState:
         self.messages = 0
         self.import_kw: float | None = None
         self.import_observed: dt.datetime | None = None
-        self.last_error: str | None = None
+        self.last_error: str | None = None  # the current problem; None while it works
+        self.last_error_at: dt.datetime | None = None  # when the latest error happened
         self._fresh_at: dt.datetime | None = None
         self._listeners: list[Listener] = []
 
@@ -150,7 +151,8 @@ class LiveFeedState:
 
 def _safe_error(err: BaseException, secrets: list[Any]) -> str:
     """An error text that cannot contain credentials, hosts or queue names."""
-    text = f"{type(err).__name__}: {err}"
+    message = str(err).strip()
+    text = f"{type(err).__name__}: {message}" if message else f"{type(err).__name__} (no details)"
     text = re.sub(r"amqps?://\S+", "<url>", text)
     for secret in secrets:
         if isinstance(secret, str) and len(secret) >= 3:
@@ -199,6 +201,8 @@ class AmperiumLiveFeed:
             return
         self._last_message = time.monotonic()
         self.state.messages += 1
+        if self.state.last_error is not None:
+            self.state.last_error = None  # readings arrive again, so the problem is over
         if not self._first_message_logged:
             self._first_message_logged = True
             _LOGGER.info("Amperium live feed: first power reading received")
@@ -245,8 +249,14 @@ class AmperiumLiveFeed:
                     raise
                 except Exception as err:  # noqa: BLE001 - any failure means "try again later"
                     state.last_error = _safe_error(err, secrets)
+                    state.last_error_at = self._now()
                     state.set_status("error")
-                    _LOGGER.warning("Amperium live feed: %s", state.last_error)
+                    # One failure is often just the network not being ready yet.
+                    _LOGGER.log(
+                        logging.WARNING if failures else logging.INFO,
+                        "Amperium live feed: %s (trying again)",
+                        state.last_error,
+                    )
                 if state.messages > messages_before and time.monotonic() - started > 60:
                     failures = 0  # it worked for a while; start again from the short wait
                     delay = BACKOFF_SECONDS[0]

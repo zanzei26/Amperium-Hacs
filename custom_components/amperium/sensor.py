@@ -791,7 +791,7 @@ class AmperiumLiveFeedSensor(SensorEntity):
     _attr_state_class = SensorStateClass.MEASUREMENT
     _attr_suggested_display_precision = 2
     _unrecorded_attributes = frozenset(
-        {"status", "messages", "age_seconds", "observed_at", "last_error"}
+        {"status", "messages", "age_seconds", "observed_at", "last_error", "last_error_at"}
     )
 
     def __init__(self, state: LiveFeedState, entry: AmperiumConfigEntry) -> None:
@@ -832,4 +832,7 @@ class AmperiumLiveFeedSensor(SensorEntity):
             "age_seconds": None if age is None else round(age),
             "observed_at": observed.isoformat() if observed else None,
             "last_error": self._state.last_error,
+            "last_error_at": (
+                self._state.last_error_at.isoformat() if self._state.last_error_at else None
+            ),
         }

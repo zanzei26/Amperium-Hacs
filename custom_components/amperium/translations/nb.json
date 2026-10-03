@@ -199,6 +199,9 @@
       },
       "capacity_threshold_kw": {
         "name": "Terskel for ny kapasitetstopp"
+      },
+      "login_valid_until": {
+        "name": "Innlogging gyldig til"
       }
     },
     "binary_sensor": {
@@ -233,6 +236,12 @@
         "norgespris": "Norgespris",
         "subsidy": "Straumstøtte"
       }
+    }
+  },
+  "issues": {
+    "login_expiring": {
+      "title": "Amperium-innloggingen går snart ut",
+      "description": "Amperium-innloggingen din går ut om ca. {days} dager. Logg inn på nytt med engangskode før da: åpne «Konfigurer på nytt» på integrasjonen under Innstillinger → Enheter og tjenester → Amperium."
     }
   }
 }

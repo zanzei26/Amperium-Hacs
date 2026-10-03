@@ -227,10 +227,12 @@ def test_refresh_success_stores_tokens_immediately():
     client = _ScriptedClient(
         {REFRESH: [(200, {"accessToken": "new-a", "refreshToken": "new-r"})]},
         access_token="old-a", refresh_token="old-r",
-        on_tokens=lambda a, r: stored.append((a, r)),
+        on_tokens=stored.append,
     )
     assert asyncio.run(client.refresh()) is True
-    assert stored == [("new-a", "new-r")]  # stored right away, once
+    assert len(stored) == 1  # stored right away, once
+    assert stored[0]["access_token"] == "new-a"
+    assert stored[0]["refresh_token"] == "new-r"
     assert (client.access_token, client.refresh_token) == ("new-a", "new-r")
 
 
@@ -246,7 +248,7 @@ def test_refresh_rejected_means_log_in_again(status):
     stored = []
     client = _ScriptedClient({REFRESH: [(status, {"errorCode": 1})]},
                              access_token="a", refresh_token="r",
-                             on_tokens=lambda a, r: stored.append((a, r)))
+                             on_tokens=stored.append)
     assert asyncio.run(client.refresh()) is False
     assert stored == []
 
@@ -284,3 +286,110 @@ def test_server_trouble_during_refresh_is_not_auth_error():
     with pytest.raises(api.AmperiumError) as err:
         asyncio.run(client.async_get_sites())
     assert not isinstance(err.value, api.AmperiumAuthError)
+
+
+# --- v0.9.1: expiry times, one refresh at a time -----------------------------------
+def test_refresh_stores_expiry_times_from_the_response():
+    stored = []
+    client = _ScriptedClient(
+        {REFRESH: [(200, {
+            "accessToken": "new-a", "refreshToken": "new-r",
+            "accessTokenExpiresAt": "2026-10-08T12:00:00Z",
+            "refreshTokenExpiresAt": "2027-10-03T12:00:00Z",
+        })]},
+        access_token="old-a", refresh_token="old-r",
+        access_expires_at="2026-10-03T12:00:00Z", refresh_expires_at="2027-10-01T12:00:00Z",
+        on_tokens=stored.append,
+    )
+    assert asyncio.run(client.refresh()) is True
+    assert stored[0] == {
+        "access_token": "new-a", "refresh_token": "new-r",
+        "access_expires_at": "2026-10-08T12:00:00Z",
+        "refresh_expires_at": "2027-10-03T12:00:00Z",
+    }
+    assert client.tokens() == stored[0]
+
+
+def test_refresh_keeps_known_expiry_if_response_has_none():
+    client = _ScriptedClient(
+        {REFRESH: [(200, {"accessToken": "new-a"})]},
+        access_token="o", refresh_token="r",
+        access_expires_at="2026-10-03T12:00:00Z", refresh_expires_at="2027-10-01T12:00:00Z",
+    )
+    assert asyncio.run(client.refresh()) is True
+    assert client.refresh_expires_at == "2027-10-01T12:00:00Z"
+    assert client.access_expires_at == "2026-10-03T12:00:00Z"
+
+
+def test_login_response_sets_tokens_and_expiry():
+    client = _ScriptedClient({"/api/accounts/login/otp": [(200, {
+        "accessToken": "a", "refreshToken": "r",
+        "accessTokenExpiresAt": "2026-10-08T12:00:00Z",
+        "refreshTokenExpiresAt": "2027-10-03T12:00:00Z",
+    })]})
+    asyncio.run(client.login_otp("12345678", "1234"))
+    assert client.tokens() == {
+        "access_token": "a", "refresh_token": "r",
+        "access_expires_at": "2026-10-08T12:00:00Z",
+        "refresh_expires_at": "2027-10-03T12:00:00Z",
+    }
+
+
+class _YieldingClient(_ScriptedClient):
+    """Like _ScriptedClient, but lets other tasks run during every request."""
+
+    async def _request(self, method, path, **kwargs):
+        await asyncio.sleep(0)
+        return await super()._request(method, path, **kwargs)
+
+
+def test_simultaneous_401s_cause_exactly_one_refresh():
+    client = _YieldingClient(
+        {"/api/sites": [(401, None), (401, None), (200, [{"siteId": 1}]), (200, [{"siteId": 1}])],
+         REFRESH: [(200, {"accessToken": "n", "refreshToken": "m"})]},
+        access_token="o", refresh_token="p",
+    )
+
+    async def both():
+        return await asyncio.gather(client._auth_get("/api/sites"), client._auth_get("/api/sites"))
+
+    results = asyncio.run(both())
+    assert results == [(200, [{"siteId": 1}]), (200, [{"siteId": 1}])]
+    refreshes = [c for c in client.calls if c[1] == REFRESH]
+    assert len(refreshes) == 1  # the second request reused the new token
+    assert client.access_token == "n"
+
+
+def test_simultaneous_401s_with_rejected_refresh_both_end_as_auth_error():
+    client = _YieldingClient(
+        {"/api/sites": [(401, None), (401, None)],
+         REFRESH: [(400, {"errorCode": 7}), (400, {"errorCode": 7})]},
+        access_token="o", refresh_token="p",
+    )
+
+    async def both():
+        return await asyncio.gather(client.async_get_sites(), client.async_get_sites(),
+                                    return_exceptions=True)
+
+    results = asyncio.run(both())
+    assert all(isinstance(r, api.AmperiumAuthError) for r in results)
+
+
+# --- days_until (login expiry warning) --------------------------------------------
+NOW = dt.datetime(2026, 10, 3, 12, tzinfo=UTC)
+
+
+def test_days_until_counts_whole_and_part_days():
+    assert derived.days_until("2026-10-13T12:00:00Z", NOW) == pytest.approx(10.0)
+    assert derived.days_until("2026-10-03T18:00:00Z", NOW) == pytest.approx(0.25)
+    assert derived.days_until("2026-10-01T12:00:00Z", NOW) == pytest.approx(-2.0)  # already past
+
+
+def test_days_until_handles_offsets_and_naive_stamps():
+    assert derived.days_until("2026-10-13T14:00:00+02:00", NOW) == pytest.approx(10.0)
+    assert derived.days_until("2026-10-13T12:00:00", NOW) == pytest.approx(10.0)  # taken as UTC
+
+
+@pytest.mark.parametrize("bad", [None, "", "not a date", 12345])
+def test_days_until_unknown_is_none(bad):
+    assert derived.days_until(bad, NOW) is None

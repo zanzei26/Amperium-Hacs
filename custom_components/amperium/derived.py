@@ -34,6 +34,19 @@ def complete_hours(buckets: list[dict[str, Any]], now: dt.datetime) -> list[dict
     return [seen[k] for k in sorted(seen)]
 
 
+def days_until(timestamp: Any, now: dt.datetime) -> float | None:
+    """Days from ``now`` until an ISO-8601 timestamp (None if unknown/invalid)."""
+    if not isinstance(timestamp, str):
+        return None
+    try:
+        when = dt.datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=dt.timezone.utc)
+    return (when - now).total_seconds() / 86400
+
+
 def consumer_price(spot: Any, surcharge: Any, vat_percent: Any) -> float | None:
     """Price per kWh the consumer pays: (spot + surcharge) incl. VAT.
 

@@ -21,6 +21,7 @@ jobs:
         id: manifest
         run: |
           version=$(python3 -c "import json; print(json.load(open('custom_components/amperium/manifest.json'))['version'])")
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
           echo "tag=v${version}" >> "$GITHUB_OUTPUT"
 
       - name: Verify pushed tag matches manifest version
@@ -31,6 +32,24 @@ jobs:
             exit 1
           fi
 
+      - name: Take the release notes from CHANGELOG.md
+        id: notes
+        run: |
+          # The section "## <version>" up to the next "## " heading.
+          awk -v v="${{ steps.manifest.outputs.version }}" '
+            index($0, "## " v) == 1 && (length($0) == length("## " v) || substr($0, length("## " v) + 1, 1) == " ") { found = 1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > release-notes.md
+          if grep -q '[^[:space:]]' release-notes.md; then
+            printf '\nHele endringsloggen: [CHANGELOG.md](https://github.com/%s/blob/%s/CHANGELOG.md)\n' \
+              "${GITHUB_REPOSITORY}" "${GITHUB_SHA}" >> release-notes.md
+            echo "has_notes=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "No CHANGELOG section for ${{ steps.manifest.outputs.version }}; generating notes instead"
+            echo "has_notes=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -39,7 +58,12 @@ jobs:
             echo "Release ${{ steps.manifest.outputs.tag }} already exists"
             exit 0
           fi
+          if [ "${{ steps.notes.outputs.has_notes }}" = "true" ]; then
+            notes_arg="--notes-file release-notes.md"
+          else
+            notes_arg="--generate-notes"
+          fi
           gh release create "${{ steps.manifest.outputs.tag }}" \
             --target "${GITHUB_SHA}" \
             --title "${{ steps.manifest.outputs.tag }}" \
-            --generate-notes
+            ${notes_arg}

@@ -52,6 +52,7 @@ Sensorer per anlegg:
 | `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
 | `sensor.*_han_signalkvalitet` | HAN-signal som tekst: Ingen signal, Dårlig, Middels, Bra, Veldig bra, Ingen data eller Ikke på nett (diagnostikk) |
 | `binary_sensor.*_han_maler_online` | Om HAN-måleren er online (diagnostikk) |
+| «Innlogging gyldig til» | Når innloggingen (fornyelsestokenet) utløper (diagnostikk). Tom til tokenet er fornyet første gang eller du har logget inn på nytt, se «Innlogging og oppdateringer» |
 
 Sensorene nullstilles daglig/månedlig, så de passer best som egne dashbordkort (se [`examples/lovelace-amperium.yaml`](examples/lovelace-amperium.yaml)).
 
@@ -158,9 +159,15 @@ Integrasjonen logger inn passordløst med engangskode én gang, lagrer et refres
 
 Du logger inn med engangskode én gang. Integrasjonen lagrer tokens i oppsettet, og de ligger igjen når du oppdaterer integrasjonen i HACS og starter Home Assistant på nytt, så en oppdatering logger deg ikke ut.
 
-- **Token fornyes automatisk** når det utløper (første kall som får 401 fornyer det og prøver på nytt). Nye tokens lagres med en gang.
+Tokenene (målt fra svar fra Amperium, ikke dokumentert av dem): tilgangstokenet varer ca. **5 dager**, fornyelsestokenet ca. **1 år**. Fornyelsen godtar bare et tilgangstoken som har utløpt, så integrasjonen fornyer først når Amperium svarer 401.
+
+- **Token fornyes automatisk** når det utløper. Treffer flere forespørsler 401 samtidig, sendes bare én fornyelse, og de andre bruker det nye tokenet. Nye tokens lagres med en gang.
 - **Feil hos Amperium logger deg ikke ut.** Bare når Amperium selv avviser tokenet (HTTP 400/401/403) ber integrasjonen deg logge inn på nytt. Tjenestefeil (HTTP 5xx, 429, nettverk) gir bare en midlertidig feil.
-- **Må du logge inn på nytt** (for eksempel etter lang tid uten kontakt), viser Home Assistant «Konfigurer på nytt» på integrasjonen. Du får en ny engangskode på SMS til samme nummer. Husk døgngrensen for engangskoder.
+- **Du ser når innloggingen utløper.** Diagnostikksensoren «Innlogging gyldig til» viser tidspunktet Amperium har oppgitt for fornyelsestokenet. Installasjoner fra før 0.9.1 mangler tidspunktet til tokenet er fornyet første gang (opptil ca. fem dager) eller du har logget inn på nytt.
+- **Varsel i god tid.** Er det under 30 dager igjen, kommer et varsel under Reparasjoner, og «Konfigurer på nytt» åpnes. Du får en ny engangskode på SMS til samme nummer. Husk døgngrensen for engangskoder.
+- **Må du logge inn på nytt av andre grunner** (for eksempel etter lang tid uten kontakt), viser Home Assistant «Konfigurer på nytt» på integrasjonen.
+- **Loggen** (nivå info) viser hver fornyelse med utløpstidene, uten tokenverdier: «Amperium token refreshed; refresh token expires … (was …)». Der ser du om fristen på ca. ett år løper videre ved hver fornyelse eller ligger fast. Det er ikke avklart ennå.
+- Kjører du et eget skript mot Amperium ved siden av, la det logge inn for seg selv med egen engangskode i stedet for å dele tokenfilen. Det er ikke bekreftet om Amperium gjør et gammelt fornyelsestoken ugyldig når et nytt utstedes.
 
 ## Hvordan det virker
 
@@ -184,6 +191,10 @@ Ikonet i `custom_components/amperium/brand/` er ikonet til appen Kraftlaget fra 
 
 
 Dette er et uoffisielt, community-laget prosjekt uten tilknytning til Amperium eller noe kraftlag. Det bruker samme offentlige API som Amperium-appen, med din egen innlogging mot din egen konto. Bruk på eget ansvar.
+
+## Versjoner
+
+Alle endringer per versjon, fra 0.1.0 til nå, står i [CHANGELOG.md](CHANGELOG.md). Det samme står i utgivelsesnotatet for hver versjon under [Releases](https://github.com/zanzei26/Amperium-Hacs-Finnaas-kraftlag/releases).
 
 ## Lisens
 

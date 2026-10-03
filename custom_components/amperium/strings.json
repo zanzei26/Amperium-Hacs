@@ -199,6 +199,9 @@
       },
       "capacity_threshold_kw": {
         "name": "Threshold for a new capacity peak"
+      },
+      "login_valid_until": {
+        "name": "Login valid until"
       }
     },
     "binary_sensor": {
@@ -233,6 +236,12 @@
         "norgespris": "Norgespris",
         "subsidy": "Electricity subsidy"
       }
+    }
+  },
+  "issues": {
+    "login_expiring": {
+      "title": "Amperium login expires soon",
+      "description": "Your Amperium login expires in about {days} days. Log in again with a one-time code before then: open the reconfigure/re-login prompt on the integration under Settings → Devices & services → Amperium."
     }
   }
 }

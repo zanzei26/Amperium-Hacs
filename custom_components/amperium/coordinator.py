@@ -8,15 +8,18 @@ from typing import Any
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 from homeassistant.util import dt as dt_util
 
 from .api import AmperiumAuthError, AmperiumClient, AmperiumError, summarise_prices
 from .const import (
+    CONF_ACCESS_EXPIRES,
     CONF_ACCESS_TOKEN,
     CONF_DAY_END,
     CONF_DAY_START,
+    CONF_REFRESH_EXPIRES,
     CONF_REFRESH_TOKEN,
     CONF_SCHEME,
     CONF_SITE_ID,
@@ -25,9 +28,12 @@ from .const import (
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
     EXTENDED_SCAN_INTERVAL,
+    ISSUE_LOGIN_EXPIRING,
+    REAUTH_WARN_DAYS,
 )
 from .derived import (
     capacity_peaks,
+    days_until,
     local_month_bounds,
     summarise_charges,
     summarise_energy,
@@ -61,10 +67,13 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             access_token=entry.data.get(CONF_ACCESS_TOKEN),
             refresh_token=entry.data.get(CONF_REFRESH_TOKEN),
             on_tokens=self._persist_tokens,
+            access_expires_at=entry.data.get(CONF_ACCESS_EXPIRES),
+            refresh_expires_at=entry.data.get(CONF_REFRESH_EXPIRES),
         )
+        self._expiry_warned = False
 
-    def _persist_tokens(self, access_token: str | None, refresh_token: str | None) -> None:
-        """Store refreshed tokens in the config entry at once.
+    def _persist_tokens(self, tokens: dict[str, str | None]) -> None:
+        """Store refreshed tokens (and their expiry) in the config entry at once.
 
         Done right when the refresh succeeds (not at the end of the update), so
         a restart or an error later in the update can never leave us holding an
@@ -74,10 +83,37 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.entry,
             data={
                 **self.entry.data,
-                CONF_ACCESS_TOKEN: access_token,
-                CONF_REFRESH_TOKEN: refresh_token,
+                CONF_ACCESS_TOKEN: tokens["access_token"],
+                CONF_REFRESH_TOKEN: tokens["refresh_token"],
+                CONF_ACCESS_EXPIRES: tokens["access_expires_at"],
+                CONF_REFRESH_EXPIRES: tokens["refresh_expires_at"],
             },
         )
+
+    def _check_login_expiry(self) -> None:
+        """Warn well before the refresh token expires and ask for a new login.
+
+        Starts the re-login flow once the refresh token has less than
+        REAUTH_WARN_DAYS left, and removes the warning after a fresh login.
+        """
+        remaining = days_until(self.client.refresh_expires_at, dt_util.utcnow())
+        issue_id = f"{ISSUE_LOGIN_EXPIRING}_{self.entry.entry_id}"
+        if remaining is None or remaining >= REAUTH_WARN_DAYS:
+            self._expiry_warned = False
+            ir.async_delete_issue(self.hass, DOMAIN, issue_id)
+            return
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            issue_id,
+            is_fixable=False,
+            severity=ir.IssueSeverity.WARNING,
+            translation_key=ISSUE_LOGIN_EXPIRING,
+            translation_placeholders={"days": str(max(0, int(remaining)))},
+        )
+        if not self._expiry_warned:
+            self._expiry_warned = True
+            self.entry.async_start_reauth(self.hass)
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data. Refreshed tokens are stored by ``_persist_tokens``."""
@@ -89,8 +125,12 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(str(err)) from err
 
         data["scheme"] = self.entry.options.get(CONF_SCHEME)
+        data["login_valid_until"] = dt_util.parse_datetime(
+            self.client.refresh_expires_at or ""
+        )
         data.update(await self._async_fetch_prices())
         data.update(await self._async_fetch_extended(bool(data.get("is_producing"))))
+        self._check_login_expiry()
 
         return data
 

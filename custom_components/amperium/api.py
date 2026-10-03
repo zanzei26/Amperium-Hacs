@@ -1,6 +1,7 @@
 """Async API client for the Amperium cloud API."""
 from __future__ import annotations
 
+import asyncio
 import datetime
 import logging
 from collections.abc import Callable
@@ -40,17 +41,40 @@ class AmperiumClient:
         session: aiohttp.ClientSession,
         access_token: str | None = None,
         refresh_token: str | None = None,
-        on_tokens: Callable[[str | None, str | None], None] | None = None,
+        on_tokens: Callable[[dict[str, str | None]], None] | None = None,
+        access_expires_at: str | None = None,
+        refresh_expires_at: str | None = None,
     ) -> None:
         """Initialise the client with an aiohttp session and optional tokens.
 
-        ``on_tokens`` is called with the new (access, refresh) pair right after
-        every successful refresh, so the caller can store them immediately.
+        ``on_tokens`` is called with the new token set (see ``tokens()``) right
+        after every successful refresh, so the caller can store it immediately.
         """
         self._session = session
         self.access_token = access_token
         self.refresh_token = refresh_token
+        self.access_expires_at = access_expires_at
+        self.refresh_expires_at = refresh_expires_at
         self._on_tokens = on_tokens
+        # Only one refresh at a time: if the refresh token is single-use, a
+        # second concurrent refresh would be rejected and look like a logout.
+        self._refresh_lock = asyncio.Lock()
+
+    def tokens(self) -> dict[str, str | None]:
+        """The current token set, ready to store in the config entry."""
+        return {
+            "access_token": self.access_token,
+            "refresh_token": self.refresh_token,
+            "access_expires_at": self.access_expires_at,
+            "refresh_expires_at": self.refresh_expires_at,
+        }
+
+    def _store_tokens(self, data: dict[str, Any]) -> None:
+        """Take tokens and expiry times from a login/refresh response."""
+        self.access_token = data["accessToken"]
+        self.refresh_token = data.get("refreshToken", self.refresh_token)
+        self.access_expires_at = data.get("accessTokenExpiresAt", self.access_expires_at)
+        self.refresh_expires_at = data.get("refreshTokenExpiresAt", self.refresh_expires_at)
 
     # ------------------------------------------------------------------ #
     # Low-level request helper
@@ -120,8 +144,8 @@ class AmperiumClient:
         )
         if status != 200 or not data or not data.get("accessToken"):
             raise AmperiumAuthError(f"OTP login failed (HTTP {status})")
-        self.access_token = data["accessToken"]
-        self.refresh_token = data.get("refreshToken")
+        self.refresh_token = None
+        self._store_tokens(data)
         return data
 
     async def refresh(self) -> bool:
@@ -146,10 +170,17 @@ class AmperiumClient:
             },
         )
         if status == 200 and data and data.get("accessToken"):
-            self.access_token = data["accessToken"]
-            self.refresh_token = data.get("refreshToken", self.refresh_token)
+            before = self.refresh_expires_at
+            self._store_tokens(data)
+            # Tells us whether the refresh token's 1-year lifetime slides with
+            # every refresh or is fixed. No token values are logged.
+            _LOGGER.info(
+                "Amperium token refreshed; refresh token expires %s (was %s), "
+                "access token expires %s",
+                self.refresh_expires_at, before, self.access_expires_at,
+            )
             if self._on_tokens is not None:
-                self._on_tokens(self.access_token, self.refresh_token)
+                self._on_tokens(self.tokens())
             return True
         if status in (400, 401, 403):
             return False
@@ -159,10 +190,21 @@ class AmperiumClient:
     # Data
     # ------------------------------------------------------------------ #
     async def _auth_get(self, path: str) -> tuple[int, Any]:
-        """Authenticated GET, refreshing the token once on 401."""
+        """Authenticated GET, refreshing the token once on 401.
+
+        Refreshing is serialised: when several requests hit 401 together, the
+        first one refreshes and the others just retry with the new token.
+        """
+        used_token = self.access_token
         status, data = await self._request("GET", path, auth=True)
-        if status == 401 and await self.refresh():
-            status, data = await self._request("GET", path, auth=True)
+        if status == 401:
+            async with self._refresh_lock:
+                if self.access_token != used_token:
+                    refreshed = True  # another request already refreshed it
+                else:
+                    refreshed = await self.refresh()
+            if refreshed:
+                status, data = await self._request("GET", path, auth=True)
         return status, data
 
     async def _get_sites_raw(self) -> tuple[int, Any]:

@@ -8,6 +8,7 @@ import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.core import callback
+from homeassistant.helpers import issue_registry as ir
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
     EntitySelector,
@@ -24,11 +25,13 @@ from .api import (
     AmperiumRateLimitError,
 )
 from .const import (
+    CONF_ACCESS_EXPIRES,
     CONF_ACCESS_TOKEN,
     CONF_DAY_END,
     CONF_DAY_START,
     CONF_PHONE,
     CONF_POWER_ENTITY,
+    CONF_REFRESH_EXPIRES,
     CONF_REFRESH_TOKEN,
     CONF_SCHEME,
     CONF_SITE_ID,
@@ -36,6 +39,7 @@ from .const import (
     DEFAULT_DAY_END,
     DEFAULT_DAY_START,
     DOMAIN,
+    ISSUE_LOGIN_EXPIRING,
     SCHEMES,
 )
 
@@ -111,7 +115,12 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
                         **entry.data,
                         CONF_ACCESS_TOKEN: self._client.access_token,
                         CONF_REFRESH_TOKEN: self._client.refresh_token,
+                        CONF_ACCESS_EXPIRES: self._client.access_expires_at,
+                        CONF_REFRESH_EXPIRES: self._client.refresh_expires_at,
                     },
+                )
+                ir.async_delete_issue(
+                    self.hass, DOMAIN, f"{ISSUE_LOGIN_EXPIRING}_{entry.entry_id}"
                 )
                 await self.hass.config_entries.async_reload(entry.entry_id)
                 return self.async_abort(reason="reauth_successful")
@@ -253,6 +262,8 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_PHONE: self._phone,
                 CONF_ACCESS_TOKEN: self._client.access_token,
                 CONF_REFRESH_TOKEN: self._client.refresh_token,
+                CONF_ACCESS_EXPIRES: self._client.access_expires_at,
+                CONF_REFRESH_EXPIRES: self._client.refresh_expires_at,
                 CONF_SITE_ID: site_id,
                 CONF_SITE_NAME: site_name,
             },

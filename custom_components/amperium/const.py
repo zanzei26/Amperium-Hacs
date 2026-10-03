@@ -25,6 +25,13 @@ ACCEPT_LANGUAGE = "nb-NO"
 CONF_PHONE = "phone"
 CONF_ACCESS_TOKEN = "access_token"
 CONF_REFRESH_TOKEN = "refresh_token"
+# When the tokens expire, as reported by Amperium (ISO-8601 strings). The access
+# token lasts 5 days, the refresh token 1 year (seen in a real token response).
+CONF_ACCESS_EXPIRES = "access_expires_at"
+CONF_REFRESH_EXPIRES = "refresh_expires_at"
+# Ask for a new login this many days before the refresh token expires.
+REAUTH_WARN_DAYS = 30
+ISSUE_LOGIN_EXPIRING = "login_expiring"
 CONF_SITE_ID = "site_id"
 CONF_SITE_NAME = "site_name"
 

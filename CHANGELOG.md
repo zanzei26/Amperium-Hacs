@@ -4,6 +4,12 @@ Nyeste versjon øverst. Versjonsnummeret står i `custom_components/amperium/man
 
 Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (`api.py`) har automatiske tester som kjøres uten Home Assistant (`cd tests && python -m pytest`). Sensorer, oppsettsflyt, varsler og statistikkimport er skrevet mot Home Assistants API, men er ikke kjørt i en ekte Home Assistant av den som har skrevet koden. Meld fra under Issues hvis noe ikke virker.
 
+## 0.11.2
+- **Rettet: live-strømmen stoppet etter ca. 10 minutter.** Rapport fra Home Assistant 3. oktober 2026: etter en omstart kom det en melding omtrent hvert 2. sekund i ca. 10 minutter (301 meldinger), så ingenting mer, mens `status` sto på `connected` uten feil. Etter 120 sekunder uten ny måling ble «Effekt nå (Amperium live)» `unknown`. Sannsynlig årsak: abonnementet (bedt om med 300 sekunders levetid) utløper hos Amperium, og meglerens kansellering av forbrukeren ble ikke fanget opp, fordi forbindelsen og kanalen står åpne uten feil. Den nøyaktige årsaken er ikke klarlagt (meldingene varte ca. 600 sekunder, ikke 300), så rettelsen dekker flere mulige årsaker.
+- **Tre rettelser:** (1) Integrasjonen tar nytt abonnement hvert 4. minutt, før det gamle utløper, med omtrent ett sekunds pause. (2) Hvis megleren kansellerer forbrukeren, avsluttes lyttingen med en gang og nytt abonnement tas. (3) Grensen for stillhet er kortet ned fra 10 minutter til 60 sekunder, siden måleren sender omtrent hvert 2. sekund.
+- Ikke testet i en ekte Home Assistant ennå: at forbindelsen holder seg over lengre tid. Se at «Effekt nå (Amperium live)» fortsatt får meldinger (`messages` øker, `age_seconds` er lav) mer enn 15 minutter etter oppdatering og omstart.
+- 6 nye tester (122 totalt): fornyelse før utløp, nullstilling av ventetiden etter feil, kansellert forbruker, og at tidsinnstillingene henger sammen. Token- og innloggingskoden er uendret.
+
 ## 0.11.1
 - **Færre unødvendige skrivinger for «Effekt nå».** Live-strømmen leverer omtrent en måling hvert annet sekund. Før skrev «Effekt nå» ny tilstand for hver melding, også når din egen effektsensor var kilden og ingenting synlig endret seg. Nå skrives det bare når verdien, kilden eller status for live-strømmen endres. Har du ingen egen sensor, og live er kilden, skrives det fortsatt for hver endring i verdien.
 - Attributtet `amperium_live_kw` på «Effekt nå» er fjernet. Verdien finnes på sensoren «Effekt nå (Amperium live)». `source`, `local_entity`, `amperium_kw` og `live_status` er uendret.

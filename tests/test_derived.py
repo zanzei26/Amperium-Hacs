@@ -7,7 +7,7 @@ import datetime as dt
 import pytest
 from zoneinfo import ZoneInfo
 
-from conftest import amqp_feed, api, derived, hourpower
+from conftest import amqp_feed, api, const, derived, hourpower
 
 UTC = dt.timezone.utc
 COMP = 154.12478544  # October figures from a live account (3 days)
@@ -632,7 +632,12 @@ def _run_feed(client, consume, *, library=True, stop_after_sleeps=1):
         except asyncio.CancelledError:
             pass
 
-    asyncio.run(go())
+    async def guarded():
+        task = asyncio.ensure_future(go())
+        done, _ = await asyncio.wait({task}, timeout=10)
+        assert done, "the feed never reached the expected point (it hung)"
+
+    asyncio.run(guarded())
     return feed, sleeps
 
 
@@ -826,7 +831,10 @@ class _FakeQueue:
 
 class _FakeChannel:
     def __init__(self):
+        import types
         self.close_callbacks = _FakeCallbacks()
+        # the underlying aiormq channel, which tells us when the broker cancels a consumer
+        self.channel = types.SimpleNamespace(on_consumer_cancel_callbacks=set())
         self.qos = None
         self.queue_asked = None
         self.consumed = None
@@ -949,3 +957,106 @@ def test_a_stale_live_feed_changes_what_is_shown_and_is_written():
     gone = derived.choose_power_now(None, 0.4, None)          # live went stale -> hourly value
     assert gate.changed((gone[0], gone[1], "connected")) is True
     assert gone == (0.4, "amperium")
+
+
+# --- the feed stopped after ~10 minutes with no error (real HA, 3 October 2026) --------------
+def test_timings_renew_inside_the_lifetime_and_notice_silence_before_the_sensor_goes_unknown():
+    assert amqp_feed.RENEW_AFTER_SECONDS < const.LIVE_FEED_TTL_SECONDS
+    assert amqp_feed.IDLE_RESUBSCRIBE_SECONDS < const.LIVE_MAX_AGE_SECONDS
+    assert amqp_feed.CHECK_SECONDS <= 10
+
+
+def test_feed_renews_the_subscription_before_it_expires(monkeypatch):
+    monkeypatch.setattr(amqp_feed, "CHECK_SECONDS", 0.01)
+    monkeypatch.setattr(amqp_feed, "RENEW_AFTER_SECONDS", 0.05)
+    monkeypatch.setattr(amqp_feed, "IDLE_RESUBSCRIBE_SECONDS", 30)
+    client = _FakeClient([_sub(), _sub()])
+    cancelled = []
+
+    async def consume(details, on_message):
+        try:
+            while True:                       # a feed that keeps delivering
+                on_message("MID.O.101", b'{"Value": 1200}')
+                await asyncio.sleep(0.005)
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+
+    feed, sleeps = _run_feed(client, consume, stop_after_sleeps=2)
+    assert client.calls == 2                  # a second subscription was taken
+    assert cancelled == [True, True]          # each old listener was dropped
+    assert sleeps == [amqp_feed.RENEW_PAUSE_SECONDS, amqp_feed.RENEW_PAUSE_SECONDS]
+    assert feed.state.import_kw == pytest.approx(1.2)
+
+
+def test_a_renewal_resets_the_failure_count(monkeypatch):
+    """After a run of failures, a good session that is renewed starts the waits over."""
+    calls = {"n": 0}
+
+    class Client(_FakeClient):
+        async def async_create_live_subscription(self, site_id, **kwargs):
+            calls["n"] += 1
+            if calls["n"] <= 2:
+                raise api.AmperiumError("HTTP 503")
+            return _sub()
+
+    async def consume(details, on_message):
+        on_message("MID.O.101", b'{"Value": 1000}')
+        await asyncio.sleep(0.03)
+
+    monkeypatch.setattr(amqp_feed, "CHECK_SECONDS", 0.01)
+    monkeypatch.setattr(amqp_feed, "RENEW_AFTER_SECONDS", 0.02)
+    feed, sleeps = _run_feed(Client([]), consume, stop_after_sleeps=4)
+    assert sleeps == [5, 15, amqp_feed.RENEW_PAUSE_SECONDS, amqp_feed.RENEW_PAUSE_SECONDS]
+
+
+def test_feed_resubscribes_after_a_minute_of_silence_by_default():
+    assert amqp_feed.IDLE_RESUBSCRIBE_SECONDS == 60
+
+
+def test_aio_pika_glue_ends_when_the_broker_cancels_the_consumer(monkeypatch):
+    """The queue expired: connection and channel stay open, but the consumer is cancelled."""
+    import sys
+    import types
+
+    connection = _FakeConnection()
+
+    async def fake_connect(**kwargs):
+        return connection
+
+    monkeypatch.setitem(sys.modules, "aio_pika", types.SimpleNamespace(connect=fake_connect))
+
+    async def go():
+        task = asyncio.ensure_future(amqp_feed.consume_with_aio_pika(dict(DETAILS), lambda *a: None))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        assert not task.done()
+        for callback in list(connection.channel_obj.channel.on_consumer_cancel_callbacks):
+            callback(object())                     # Basic.Cancel frame from the broker
+        await asyncio.wait_for(task, 1)
+
+    asyncio.run(go())
+    assert connection.closed is True
+
+
+def test_aio_pika_glue_still_works_when_the_library_has_no_cancel_hook(monkeypatch):
+    import sys
+    import types
+
+    connection = _FakeConnection()
+    del connection.channel_obj.channel                  # an older library without the hook
+
+    async def fake_connect(**kwargs):
+        return connection
+
+    monkeypatch.setitem(sys.modules, "aio_pika", types.SimpleNamespace(connect=fake_connect))
+
+    async def go():
+        task = asyncio.ensure_future(amqp_feed.consume_with_aio_pika(dict(DETAILS), lambda *a: None))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        connection.close_callbacks.fire()
+        await asyncio.wait_for(task, 1)
+
+    asyncio.run(go())
+    assert connection.closed is True

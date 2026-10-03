@@ -38,9 +38,18 @@ _LOGGER = logging.getLogger(__name__)
 # Waits between attempts after a failure; the last one repeats.
 BACKOFF_SECONDS = (5, 15, 30, 60, 120, 300)
 # Subscribe again when nothing has arrived for this long (the queue may have expired).
-IDLE_RESUBSCRIBE_SECONDS = 600
+# The meter sends about every 2 s, so a minute of silence means the feed has stopped.
+IDLE_RESUBSCRIBE_SECONDS = 60
+# Take a new subscription before the old one expires. The subscription is asked for with
+# a lifetime of 300 s (LIVE_FEED_TTL_SECONDS); a real feed was seen to stop after about
+# 10 minutes without any error, so renew well inside the lifetime.
+RENEW_AFTER_SECONDS = 240
+# The short pause between a planned renewal and the next subscription.
+RENEW_PAUSE_SECONDS = 1
 # How often listeners are told to re-read the state (so an old reading goes stale).
 TICK_SECONDS = 30
+# How often the listening checks whether it is time to renew or the feed went quiet.
+CHECK_SECONDS = 10
 
 Listener = Callable[[], None]
 
@@ -225,8 +234,13 @@ class AmperiumLiveFeed:
                     self._first_message_logged = False
                     self._last_message = time.monotonic()
                     state.set_status("connected")
-                    await self._listen(subscription.details)
-                    _LOGGER.info("Amperium live feed: connection ended, subscribing again")
+                    reason = await self._listen(subscription.details)
+                    if reason == "renew":
+                        _LOGGER.debug("Amperium live feed: renewing the subscription")
+                        failures = 0
+                        await self._sleep(RENEW_PAUSE_SECONDS)
+                        continue
+                    _LOGGER.info("Amperium live feed: %s, subscribing again", reason)
                 except asyncio.CancelledError:
                     raise
                 except Exception as err:  # noqa: BLE001 - any failure means "try again later"
@@ -246,19 +260,27 @@ class AmperiumLiveFeed:
                 await ticker
             state.set_status("off")
 
-    async def _listen(self, details: dict[str, Any]) -> None:
-        """Consume the queue until it ends, or until nothing arrives for too long."""
+    async def _listen(self, details: dict[str, Any]) -> str:
+        """Consume the queue; say why it stopped.
+
+        Returns "renew" (time for a new subscription), "nothing received for N s"
+        (the feed went quiet) or "connection ended". Errors are raised.
+        """
         task = asyncio.ensure_future(self._consume(details, self.handle_message))
+        started = time.monotonic()
+        check = min(CHECK_SECONDS, IDLE_RESUBSCRIBE_SECONDS, RENEW_AFTER_SECONDS)
         try:
             while not task.done():
-                await asyncio.wait({task}, timeout=TICK_SECONDS)
-                if not task.done() and time.monotonic() - self._last_message > IDLE_RESUBSCRIBE_SECONDS:
-                    _LOGGER.info(
-                        "Amperium live feed: nothing received for %s s, subscribing again",
-                        IDLE_RESUBSCRIBE_SECONDS,
-                    )
-                    return
+                await asyncio.wait({task}, timeout=check)
+                if task.done():
+                    break
+                now = time.monotonic()
+                if now - started >= RENEW_AFTER_SECONDS:
+                    return "renew"
+                if now - self._last_message > IDLE_RESUBSCRIBE_SECONDS:
+                    return f"nothing received for {IDLE_RESUBSCRIBE_SECONDS} s"
             task.result()
+            return "connection ended"
         finally:
             if not task.done():
                 task.cancel()
@@ -337,6 +359,14 @@ async def consume_with_aio_pika(
     try:
         channel = await connection.channel()
         channel.close_callbacks.add(lambda *_: closed.set())
+        # The broker cancels the consumer when the queue is removed (for example when
+        # the subscription expires). The connection and channel then stay open without
+        # any error, so this must end the listening too.
+        cancel_callbacks = getattr(
+            getattr(channel, "channel", None), "on_consumer_cancel_callbacks", None
+        )
+        if cancel_callbacks is not None:
+            cancel_callbacks.add(lambda *_: closed.set())
         await channel.set_qos(prefetch_count=20)
         queue = await channel.get_queue(details["queueName"], ensure=False)
 

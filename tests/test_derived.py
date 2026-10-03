@@ -141,3 +141,64 @@ def test_power_unit_conversion():
     assert hourpower.to_kw("2.5", "kW") == 2.5
     assert hourpower.to_kw("unavailable", "W") is None
     assert hourpower.to_kw("5", None) is None
+
+
+# --- capacity peaks (Finnas tariff 2026: three highest hours on three different days) ---
+def _hours(values):
+    """values: {(day, hour_local_oslo): kwh} in October 2026 (CEST, UTC+2)."""
+    out = []
+    for (day, hour), kwh in values.items():
+        start = dt.datetime(2026, 10, day, hour, tzinfo=dt.timezone(dt.timedelta(hours=2))).astimezone(UTC)
+        out.append({"start": start, "end": start + dt.timedelta(hours=1), "import": kwh, "export": 0.0})
+    return out
+
+
+def test_capacity_peaks_use_three_different_days():
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Oslo")
+    now = dt.datetime(2026, 10, 10, 12, tzinfo=UTC)
+    buckets = _hours({
+        (1, 8): 9.0, (1, 9): 8.9, (1, 10): 8.8,   # three high hours, same day: only 9.0 counts
+        (2, 18): 6.0, (3, 7): 5.0, (4, 12): 3.0, (5, 12): 1.0,
+    })
+    out = derived.capacity_peaks(buckets, now, tz)
+    assert [p["kw"] for p in out["capacity_peaks"]] == [9.0, 6.0, 5.0]
+    assert out["capacity_calc_kw"] == pytest.approx((9.0 + 6.0 + 5.0) / 3)
+    assert out["capacity_threshold_kw"] == 5.0  # a new day must beat the third highest
+    assert out["capacity_peak_days"] == 5
+    assert out["capacity_peaks"][0]["date"] == "2026-10-01"
+
+
+def test_capacity_peaks_with_fewer_than_three_days():
+    from zoneinfo import ZoneInfo
+
+    now = dt.datetime(2026, 10, 3, 12, tzinfo=UTC)
+    out = derived.capacity_peaks(_hours({(1, 8): 4.0, (2, 8): 2.0}), now, ZoneInfo("Europe/Oslo"))
+    assert out["capacity_calc_kw"] == pytest.approx(3.0)
+    assert out["capacity_threshold_kw"] == 0.0
+
+
+def test_capacity_peaks_ignore_previous_month_and_empty():
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Oslo")
+    now = dt.datetime(2026, 10, 3, 12, tzinfo=UTC)
+    september = [{"start": dt.datetime(2026, 9, 30, 10, tzinfo=UTC), "end": dt.datetime(2026, 9, 30, 11, tzinfo=UTC),
+                  "import": 50.0, "export": 0.0}]
+    assert derived.capacity_peaks(september, now, tz) == {}
+    assert derived.capacity_peaks([], now, tz) == {}
+
+
+def test_capacity_peak_day_follows_local_midnight():
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Oslo")
+    now = dt.datetime(2026, 10, 4, 12, tzinfo=UTC)
+    # 22:30 UTC on 1 Oct is 00:30 local on 2 Oct, so it belongs to 2 Oct, not 1 Oct.
+    late = {"start": dt.datetime(2026, 10, 1, 22, tzinfo=UTC), "end": dt.datetime(2026, 10, 1, 23, tzinfo=UTC),
+            "import": 7.0, "export": 0.0}
+    early = {"start": dt.datetime(2026, 10, 1, 8, tzinfo=UTC), "end": dt.datetime(2026, 10, 1, 9, tzinfo=UTC),
+             "import": 6.0, "export": 0.0}
+    out = derived.capacity_peaks([late, early], now, tz)
+    assert sorted(p["date"] for p in out["capacity_peaks"]) == ["2026-10-01", "2026-10-02"]

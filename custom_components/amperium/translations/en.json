@@ -180,6 +180,12 @@
       },
       "spot_price_incl_vat": {
         "name": "Electricity price now incl. surcharge and VAT"
+      },
+      "capacity_calc_kw": {
+        "name": "Capacity basis this month (calculated, three highest days)"
+      },
+      "capacity_threshold_kw": {
+        "name": "Threshold for a new capacity peak"
       }
     },
     "binary_sensor": {

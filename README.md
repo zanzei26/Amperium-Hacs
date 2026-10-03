@@ -105,11 +105,28 @@ Støtten leses uten hensyn til fortegn (den er alltid et fradrag). Tallene for *
 
 ### Kapasitetsledd
 
-Kapasitetsleddet bestemmes av **kapasitetsgrunnlaget**, en effekt i kW som Amperium regner ut fra månedens topper. Grunnlaget avgjør hvilket trinn du havner i. Eksempel fra Finnås: 5–10 kW koster 400 kr/måned, og 10–15 kW koster 525 kr/måned. Integrasjonen viser grunnlaget, trinnets beløp, hvor mange kW det er til neste trinn og hva neste trinn koster ekstra. Hele trinntabellen ligger som attributt.
+Slik beregnes det hos Finnås Kraftlag (tariffark gjeldende fra 1.1.2026, privatkunder): **trinnet bestemmes av snittet av de tre høyeste timeforbrukene i tre ulike døgn** i måneden du faktureres for. Hvis snittet blir 6,5 kW, havner du i trinn 5–10 kW og betaler 400 kr for måneden. Beløpene er **inkludert mva**.
 
-Hvor mange topper som inngår i grunnlaget, er ikke bekreftet. Det ser ut til å bygge på timetopper og ikke dagssnitt. Trinnbeløpene ser ut til å være inkludert mva. Integrasjonen regner ikke ut grunnlaget selv, men bruker Amperiums eget tall.
+| Trinn | kr/mnd |
+|---|---|
+| 0–2 kW | 210 |
+| 2–5 kW | 300 |
+| 5–10 kW | 400 |
+| 10–15 kW | 525 |
+| 15–20 kW | 700 |
+| 20–25 kW | 875 |
+| 25–50 kW | 2000 |
+| 50–75 kW | 3000 |
+| 75–100 kW | 4000 |
+| over 100 kW | 5000 |
 
-Har du valgt en effektsensor (se over), viser «Timeeffekt denne timen (prognose)» hvor timen er på vei, så du kan sammenligne med «Til neste kapasitetstrinn».
+Tabellen er den samme som Amperium selv leverer, og integrasjonen leser trinnene derfra. Du får:
+
+- **Kapasitetsgrunnlag denne måneden** (kW), **kapasitetsleddet** (kr) og **kW til neste trinn**, alle fra Amperium. Samme tall for forrige måned. Hele trinntabellen ligger som attributt.
+- **Kapasitetsgrunnlag (beregnet, tre høyeste døgn):** Integrasjonen finner høyeste time hvert døgn (lokal tid) i denne måneden, tar de tre høyeste døgntoppene og regner snittet. Attributtet `peaks` viser de tre timene (dato, time og kW), og `difference_kw` viser avviket fra Amperiums eget tall. Amperiums tall er fasit. Den beregnede verdien brukes til å se hvilke timer som er toppene.
+- **Terskel for ny kapasitetstopp:** Den tredje høyeste døgntoppen. Et nytt døgn må ha en time over dette for å heve grunnlaget.
+
+Timedata fra Amperium kommer med litt forsinkelse, så den pågående timen er ikke med. Har du valgt en effektsensor (se over), viser «Timeeffekt denne timen (prognose)» attributtene `capacity_threshold_kw` og `above_threshold`. Da ser du om timen er på vei over terskelen.
 
 ### Dag og natt
 

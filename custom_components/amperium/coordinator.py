@@ -27,6 +27,7 @@ from .const import (
     EXTENDED_SCAN_INTERVAL,
 )
 from .derived import (
+    capacity_peaks,
     local_month_bounds,
     summarise_charges,
     summarise_energy,
@@ -183,6 +184,7 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         day_end = self.entry.options.get(CONF_DAY_END, DEFAULT_DAY_END)
         new: dict[str, Any] = {}
         new.update(summarise_energy(energy, now, tz, day_start, day_end))
+        new.update(capacity_peaks(energy, now, tz))
         new.update(summarise_charges(charges, now, tz))
         for suffix, response in grid_responses.items():
             new.update(summarise_grid(response, suffix))

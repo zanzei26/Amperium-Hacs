@@ -134,6 +134,47 @@ def summarise_energy(
     return out
 
 
+def capacity_peaks(
+    buckets: list[dict[str, Any]], now: dt.datetime, tz: dt.tzinfo, count: int = 3
+) -> dict[str, Any]:
+    """Estimate the capacity basis from hourly consumption.
+
+    Finnas Kraftlag's tariff (2026): the tier is set by the average of the
+    three highest hourly consumptions on three different days in the billing
+    month. An hour's kWh equals its average kW. For each local day the
+    highest hour is found, then the ``count`` highest of those day peaks are
+    averaged. Amperium's own value (gridRent.capacityChargeAveragePower) stays
+    the authority; this shows which hours are the peaks and what a new day
+    must beat to enter the top three.
+    """
+    now_local = now.astimezone(tz)
+    _, this_start, _ = local_month_bounds(now_local)
+    best: dict[dt.date, dict[str, Any]] = {}
+    for bucket in complete_hours(buckets, now):
+        local = bucket["start"].astimezone(tz)
+        if (local.year, local.month) != (this_start.year, this_start.month):
+            continue
+        day = local.date()
+        current = best.get(day)
+        if current is None or bucket["import"] > current["kw"]:
+            best[day] = {
+                "date": day.isoformat(),
+                "hour_start": _iso_z(bucket["start"]),
+                "kw": bucket["import"],
+            }
+    if not best:
+        return {}
+    ranked = sorted(best.values(), key=lambda p: p["kw"], reverse=True)[:count]
+    return {
+        "capacity_calc_kw": sum(p["kw"] for p in ranked) / len(ranked),
+        # What a new day's peak must exceed to enter the top three (0 while
+        # fewer than three days have data).
+        "capacity_threshold_kw": ranked[-1]["kw"] if len(ranked) == count else 0.0,
+        "capacity_peaks": ranked,
+        "capacity_peak_days": len(best),
+    }
+
+
 def summarise_charges(
     buckets: list[dict[str, Any]], now: dt.datetime, tz: dt.tzinfo
 ) -> dict[str, Any]:

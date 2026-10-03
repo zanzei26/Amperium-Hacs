@@ -258,6 +258,24 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: _round(d.get("capacity_avg_kw"), 3),
     ),
     AmperiumSensorDescription(
+        key="capacity_calc_kw",
+        translation_key="capacity_calc_kw",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        icon="mdi:chart-bell-curve-cumulative",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_calc_kw"), 3),
+    ),
+    AmperiumSensorDescription(
+        key="capacity_threshold_kw",
+        translation_key="capacity_threshold_kw",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        icon="mdi:target",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_threshold_kw"), 3),
+    ),
+    AmperiumSensorDescription(
         key="capacity_amount",
         translation_key="capacity_amount",
         native_unit_of_measurement="kr",
@@ -485,7 +503,7 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
     _attr_has_entity_name = True
     # Hourly price lists are large and change daily; keep them out of the DB.
     _unrecorded_attributes = frozenset(
-        {"prices_today", "prices_tomorrow", "consumption_today", "tiers"}
+        {"prices_today", "prices_tomorrow", "consumption_today", "tiers", "peaks"}
     )
 
     def __init__(
@@ -536,6 +554,18 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             return data.get("grid_breakdown")
         if key == "capacity_avg_kw":
             return data.get("capacity_details")
+        if key == "capacity_calc_kw":
+            calc, api_value = data.get("capacity_calc_kw"), data.get("capacity_avg_kw")
+            return {
+                "peaks": data.get("capacity_peaks", []),
+                "days_with_data": data.get("capacity_peak_days"),
+                "amperium_value_kw": api_value,
+                "difference_kw": (
+                    round(calc - api_value, 3)
+                    if calc is not None and api_value is not None
+                    else None
+                ),
+            }
         if key == "capacity_avg_kw_last_month":
             return data.get("capacity_details_last_month")
         if key == "price_min_today":
@@ -573,6 +603,7 @@ class AmperiumLivePowerSensor(SensorEntity):
     ) -> None:
         """Initialise the sensor ("live_power" or "hour_power_forecast")."""
         self._tracker = tracker
+        self._coordinator = entry.runtime_data
         self._kind = kind
         self._attr_translation_key = kind
         site_id = entry.data[CONF_SITE_ID]
@@ -610,4 +641,14 @@ class AmperiumLivePowerSensor(SensorEntity):
             attrs["average_so_far_kw"] = None if average is None else round(average, 3)
             attrs["coverage"] = round(snap["coverage"], 2)
             attrs["hour_start"] = snap["hour_start"].isoformat()
+            # Compare with this month's top-three threshold (completed hours).
+            data = self._coordinator.data or {}
+            threshold = data.get("capacity_threshold_kw")
+            forecast = snap["forecast_kw"]
+            attrs["capacity_threshold_kw"] = threshold
+            attrs["above_threshold"] = (
+                forecast > threshold
+                if forecast is not None and threshold is not None
+                else None
+            )
         return attrs

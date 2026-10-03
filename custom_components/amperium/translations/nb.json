@@ -180,6 +180,12 @@
       },
       "spot_price_incl_vat": {
         "name": "Strømpris nå inkl. påslag og mva"
+      },
+      "capacity_calc_kw": {
+        "name": "Kapasitetsgrunnlag denne måneden (beregnet, tre høyeste døgn)"
+      },
+      "capacity_threshold_kw": {
+        "name": "Terskel for ny kapasitetstopp"
       }
     },
     "binary_sensor": {

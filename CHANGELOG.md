@@ -1,5 +1,10 @@
 # Endringslogg
 
+## 0.8.0
+- Kapasitetsgrunnlaget beregnes nå også fra timedata etter Finnås Kraftlags regel (snittet av de tre høyeste timene i tre ulike døgn): «Kapasitetsgrunnlag (beregnet, tre høyeste døgn)» med de tre toppene som attributt, og «Terskel for ny kapasitetstopp».
+- Prognosesensoren for timeeffekt viser terskelen og om timen er på vei over den (krever valgt effektsensor).
+- Regelen og trinnbeløpene (inkl. mva) er bekreftet mot tariffarket fra 1.1.2026.
+
 ## 0.7.0 (brudd for eksisterende installasjoner)
 
 **Fjernet** (det skal bare finnes ett støttetall, nemlig støtten som er trukket fra nettleien i `gridRent`):

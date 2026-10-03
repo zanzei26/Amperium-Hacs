@@ -53,17 +53,34 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._site_id = entry.data[CONF_SITE_ID]
         self._extended: dict[str, Any] = {}
         self._extended_at: datetime | None = None
+        # Used to tell a real options change from a token-only entry update.
+        self.options_snapshot = dict(entry.options)
         session = async_get_clientsession(hass)
         self.client = AmperiumClient(
             session,
             access_token=entry.data.get(CONF_ACCESS_TOKEN),
             refresh_token=entry.data.get(CONF_REFRESH_TOKEN),
+            on_tokens=self._persist_tokens,
+        )
+
+    def _persist_tokens(self, access_token: str | None, refresh_token: str | None) -> None:
+        """Store refreshed tokens in the config entry at once.
+
+        Done right when the refresh succeeds (not at the end of the update), so
+        a restart or an error later in the update can never leave us holding an
+        old token pair if Amperium rotates the refresh token.
+        """
+        self.hass.config_entries.async_update_entry(
+            self.entry,
+            data={
+                **self.entry.data,
+                CONF_ACCESS_TOKEN: access_token,
+                CONF_REFRESH_TOKEN: refresh_token,
+            },
         )
 
     async def _async_update_data(self) -> dict[str, Any]:
-        """Fetch data, persisting tokens if they were refreshed."""
-        before_access = self.client.access_token
-        before_refresh = self.client.refresh_token
+        """Fetch data. Refreshed tokens are stored by ``_persist_tokens``."""
         try:
             data = await self.client.async_fetch(self._site_id)
         except AmperiumAuthError as err:
@@ -74,19 +91,6 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data["scheme"] = self.entry.options.get(CONF_SCHEME)
         data.update(await self._async_fetch_prices())
         data.update(await self._async_fetch_extended(bool(data.get("is_producing"))))
-
-        # If the access/refresh token changed (lazy refresh), persist it so
-        # a restart keeps working.
-        if (
-            self.client.access_token != before_access
-            or self.client.refresh_token != before_refresh
-        ):
-            new_data = {
-                **self.entry.data,
-                CONF_ACCESS_TOKEN: self.client.access_token,
-                CONF_REFRESH_TOKEN: self.client.refresh_token,
-            }
-            self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
         return data
 

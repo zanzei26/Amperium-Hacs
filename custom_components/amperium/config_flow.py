@@ -53,6 +53,74 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._client: AmperiumClient | None = None
         self._sites: list[dict[str, Any]] = []
         self._site: dict[str, Any] | None = None
+        self._reauth_entry_id: str | None = None
+
+    # ------------------------------------------------------------------ #
+    # Re-authentication: Home Assistant starts this when the token pair is
+    # no longer valid (e.g. the refresh token expired during a long downtime).
+    # ------------------------------------------------------------------ #
+    async def async_step_reauth(self, entry_data: dict[str, Any]) -> ConfigFlowResult:
+        """Start re-authentication for an existing entry."""
+        self._reauth_entry_id = self.context["entry_id"]
+        self._phone = entry_data[CONF_PHONE]
+        return await self.async_step_reauth_confirm()
+
+    async def async_step_reauth_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Send a new one-time code to the phone number already in use."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            client = AmperiumClient(async_get_clientsession(self.hass))
+            try:
+                await client.request_otp(self._phone)
+            except AmperiumRateLimitError:
+                errors["base"] = "too_many_otp"
+            except AmperiumError:
+                errors["base"] = "request_otp_failed"
+            else:
+                self._client = client
+                return await self.async_step_reauth_otp()
+        return self.async_show_form(
+            step_id="reauth_confirm",
+            data_schema=vol.Schema({}),
+            errors=errors,
+            description_placeholders={"phone": self._phone},
+        )
+
+    async def async_step_reauth_otp(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Log in with the new code and store the new tokens."""
+        errors: dict[str, str] = {}
+        assert self._client is not None
+        if user_input is not None:
+            try:
+                await self._client.login_otp(self._phone, str(user_input["otp"]).strip())
+            except AmperiumAuthError:
+                errors["base"] = "invalid_otp"
+            except AmperiumError:
+                errors["base"] = "cannot_connect"
+            else:
+                entry = self.hass.config_entries.async_get_entry(self._reauth_entry_id)
+                if entry is None:
+                    return self.async_abort(reason="reauth_failed")
+                self.hass.config_entries.async_update_entry(
+                    entry,
+                    data={
+                        **entry.data,
+                        CONF_ACCESS_TOKEN: self._client.access_token,
+                        CONF_REFRESH_TOKEN: self._client.refresh_token,
+                    },
+                )
+                await self.hass.config_entries.async_reload(entry.entry_id)
+                return self.async_abort(reason="reauth_successful")
+        return self.async_show_form(
+            step_id="reauth_otp",
+            data_schema=vol.Schema({vol.Required("otp"): str}),
+            errors=errors,
+            description_placeholders={"phone": self._phone},
+        )
 
     @staticmethod
     @callback

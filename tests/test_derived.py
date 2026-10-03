@@ -202,3 +202,85 @@ def test_capacity_peak_day_follows_local_midnight():
              "import": 6.0, "export": 0.0}
     out = derived.capacity_peaks([late, early], now, tz)
     assert sorted(p["date"] for p in out["capacity_peaks"]) == ["2026-10-01", "2026-10-02"]
+
+
+# --- token refresh: never look like a logout unless Amperium says so ----------------
+class _ScriptedClient(api.AmperiumClient):
+    """Client whose HTTP answers are scripted: path -> list of (status, body)."""
+
+    def __init__(self, script, **kwargs):
+        super().__init__(None, **kwargs)
+        self._script = {k: list(v) for k, v in script.items()}
+        self.calls = []
+
+    async def _request(self, method, path, **kwargs):
+        self.calls.append((method, path.split("?")[0]))
+        key = path.split("?")[0]
+        return self._script[key].pop(0)
+
+
+REFRESH = "/api/accounts/login/refresh-token"
+
+
+def test_refresh_success_stores_tokens_immediately():
+    stored = []
+    client = _ScriptedClient(
+        {REFRESH: [(200, {"accessToken": "new-a", "refreshToken": "new-r"})]},
+        access_token="old-a", refresh_token="old-r",
+        on_tokens=lambda a, r: stored.append((a, r)),
+    )
+    assert asyncio.run(client.refresh()) is True
+    assert stored == [("new-a", "new-r")]  # stored right away, once
+    assert (client.access_token, client.refresh_token) == ("new-a", "new-r")
+
+
+def test_refresh_keeps_old_refresh_token_if_not_rotated():
+    client = _ScriptedClient({REFRESH: [(200, {"accessToken": "new-a"})]},
+                             access_token="old-a", refresh_token="old-r")
+    assert asyncio.run(client.refresh()) is True
+    assert client.refresh_token == "old-r"
+
+
+@pytest.mark.parametrize("status", [400, 401, 403])
+def test_refresh_rejected_means_log_in_again(status):
+    stored = []
+    client = _ScriptedClient({REFRESH: [(status, {"errorCode": 1})]},
+                             access_token="a", refresh_token="r",
+                             on_tokens=lambda a, r: stored.append((a, r)))
+    assert asyncio.run(client.refresh()) is False
+    assert stored == []
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+def test_refresh_server_trouble_is_not_a_logout(status):
+    client = _ScriptedClient({REFRESH: [(status, None)]}, access_token="a", refresh_token="r")
+    with pytest.raises(api.AmperiumError) as err:
+        asyncio.run(client.refresh())
+    assert not isinstance(err.value, api.AmperiumAuthError)
+    assert (client.access_token, client.refresh_token) == ("a", "r")  # untouched
+
+
+def test_request_retried_after_successful_refresh():
+    client = _ScriptedClient(
+        {"/api/sites": [(401, None), (200, [{"siteId": 1}])],
+         REFRESH: [(200, {"accessToken": "n", "refreshToken": "m"})]},
+        access_token="o", refresh_token="p",
+    )
+    status, data = asyncio.run(client._auth_get("/api/sites"))
+    assert (status, data) == (200, [{"siteId": 1}])
+    assert [c[1] for c in client.calls] == ["/api/sites", REFRESH, "/api/sites"]
+
+
+def test_expired_refresh_token_ends_as_auth_error():
+    client = _ScriptedClient({"/api/sites": [(401, None)], REFRESH: [(400, {"errorCode": 7})]},
+                             access_token="o", refresh_token="p")
+    with pytest.raises(api.AmperiumAuthError):
+        asyncio.run(client.async_get_sites())
+
+
+def test_server_trouble_during_refresh_is_not_auth_error():
+    client = _ScriptedClient({"/api/sites": [(401, None)], REFRESH: [(503, None)]},
+                             access_token="o", refresh_token="p")
+    with pytest.raises(api.AmperiumError) as err:
+        asyncio.run(client.async_get_sites())
+    assert not isinstance(err.value, api.AmperiumAuthError)

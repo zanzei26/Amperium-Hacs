@@ -1,5 +1,11 @@
 # Endringslogg
 
+## 0.9.0
+- **Ingen utlogging ved oppdatering eller tjenestefeil:** Tokens lagres med en gang de er fornyet. En feil hos Amperium under fornyelsen (HTTP 5xx, 429, nettverk) gir bare en midlertidig feil og blir ikke tolket som ugyldig token. Hvert lagret token starter ikke lenger hele integrasjonen på nytt.
+- **Logg inn på nytt:** Har integrasjonen mistet innloggingen, kan du nå sende en ny engangskode fra «Konfigurer på nytt» (før fantes ingen slik flyt).
+- Ikon i `brand/` (vises i Home Assistant 2026.3 og nyere).
+- 13 nye tester for token-fornyelsen.
+
 ## 0.8.0
 - Kapasitetsgrunnlaget beregnes nå også fra timedata etter Finnås Kraftlags regel (snittet av de tre høyeste timene i tre ulike døgn): «Kapasitetsgrunnlag (beregnet, tre høyeste døgn)» med de tre toppene som attributt, og «Terskel for ny kapasitetstopp».
 - Prognosesensoren for timeeffekt viser terskelen og om timen er på vei over den (krever valgt effektsensor).

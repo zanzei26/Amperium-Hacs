@@ -28,6 +28,17 @@
         "data": {
           "scheme": "Scheme"
         }
+      },
+      "reauth_confirm": {
+        "title": "Log in again",
+        "description": "Amperium needs a new login. A one-time code will be sent by SMS to {phone}. Press Submit to send it."
+      },
+      "reauth_otp": {
+        "title": "Enter code",
+        "description": "Enter the one-time code sent by SMS to {phone}.",
+        "data": {
+          "otp": "One-time code"
+        }
       }
     },
     "error": {
@@ -38,7 +49,9 @@
       "no_sites": "No sites were found for this account."
     },
     "abort": {
-      "already_configured": "This site is already set up."
+      "already_configured": "This site is already set up.",
+      "reauth_successful": "Logged in again.",
+      "reauth_failed": "The integration entry could not be found."
     }
   },
   "entity": {

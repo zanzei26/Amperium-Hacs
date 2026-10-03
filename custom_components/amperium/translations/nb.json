@@ -28,6 +28,17 @@
         "data": {
           "scheme": "Ordning"
         }
+      },
+      "reauth_confirm": {
+        "title": "Logg inn på nytt",
+        "description": "Amperium trenger en ny innlogging. Det sendes en engangskode på SMS til {phone}. Trykk Send for å sende den."
+      },
+      "reauth_otp": {
+        "title": "Skriv inn kode",
+        "description": "Skriv inn engangskoden du fikk på SMS til {phone}.",
+        "data": {
+          "otp": "Engangskode"
+        }
       }
     },
     "error": {
@@ -38,7 +49,9 @@
       "no_sites": "Fant ingen anlegg på denne kontoen."
     },
     "abort": {
-      "already_configured": "Dette anlegget er allerede satt opp."
+      "already_configured": "Dette anlegget er allerede satt opp.",
+      "reauth_successful": "Logget inn på nytt.",
+      "reauth_failed": "Fant ikke integrasjonsoppføringen."
     }
   },
   "entity": {

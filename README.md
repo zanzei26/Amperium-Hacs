@@ -154,6 +154,14 @@ Eller manuelt: kopier `custom_components/amperium/` til `config/custom_component
 
 Integrasjonen logger inn passordløst med engangskode én gang, lagrer et refresh-token og fornyer tilgangen automatisk i bakgrunnen. Du trenger normalt aldri logge inn på nytt.
 
+## Innlogging og oppdateringer
+
+Du logger inn med engangskode én gang. Integrasjonen lagrer tokens i oppsettet, og de ligger igjen når du oppdaterer integrasjonen i HACS og starter Home Assistant på nytt, så en oppdatering logger deg ikke ut.
+
+- **Token fornyes automatisk** når det utløper (første kall som får 401 fornyer det og prøver på nytt). Nye tokens lagres med en gang.
+- **Feil hos Amperium logger deg ikke ut.** Bare når Amperium selv avviser tokenet (HTTP 400/401/403) ber integrasjonen deg logge inn på nytt. Tjenestefeil (HTTP 5xx, 429, nettverk) gir bare en midlertidig feil.
+- **Må du logge inn på nytt** (for eksempel etter lang tid uten kontakt), viser Home Assistant «Konfigurer på nytt» på integrasjonen. Du får en ny engangskode på SMS til samme nummer. Husk døgngrensen for engangskoder.
+
 ## Hvordan det virker
 
 Amperium bruker passordløs OTP-innlogging i tillegg til en statisk app-nøkkel (`api-key`). Integrasjonen:
@@ -171,6 +179,9 @@ Amperium bruker passordløs OTP-innlogging i tillegg til en statisk app-nøkkel 
 Polling hvert 15. minutt (HAN-måleren oppdateres time for time).
 
 ## Ansvarsfraskrivelse
+
+Ikonet i `custom_components/amperium/brand/` er ikonet til appen Kraftlaget fra Finnås Kraftlag. Det vises i Home Assistant 2026.3 og nyere, og brukes bare for å vise hvilken tjeneste integrasjonen kobler til. Det betyr ikke at Finnås Kraftlag står bak integrasjonen.
+
 
 Dette er et uoffisielt, community-laget prosjekt uten tilknytning til Amperium eller noe kraftlag. Det bruker samme offentlige API som Amperium-appen, med din egen innlogging mot din egen konto. Bruk på eget ansvar.
 

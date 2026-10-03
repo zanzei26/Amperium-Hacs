@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import aiohttp
@@ -39,11 +40,17 @@ class AmperiumClient:
         session: aiohttp.ClientSession,
         access_token: str | None = None,
         refresh_token: str | None = None,
+        on_tokens: Callable[[str | None, str | None], None] | None = None,
     ) -> None:
-        """Initialise the client with an aiohttp session and optional tokens."""
+        """Initialise the client with an aiohttp session and optional tokens.
+
+        ``on_tokens`` is called with the new (access, refresh) pair right after
+        every successful refresh, so the caller can store them immediately.
+        """
         self._session = session
         self.access_token = access_token
         self.refresh_token = refresh_token
+        self._on_tokens = on_tokens
 
     # ------------------------------------------------------------------ #
     # Low-level request helper
@@ -118,7 +125,12 @@ class AmperiumClient:
         return data
 
     async def refresh(self) -> bool:
-        """Refresh the access token. Returns True on success.
+        """Refresh the access token.
+
+        Returns True on success and False when Amperium says the token pair is
+        not valid (HTTP 400/401/403): the user has to log in again. Any other
+        failure (HTTP 5xx, 429, network) raises AmperiumError, because it says
+        nothing about the tokens and must never look like a logout.
 
         Only works once the current access token has expired, which is
         exactly the 401 case we call it from.
@@ -136,8 +148,12 @@ class AmperiumClient:
         if status == 200 and data and data.get("accessToken"):
             self.access_token = data["accessToken"]
             self.refresh_token = data.get("refreshToken", self.refresh_token)
+            if self._on_tokens is not None:
+                self._on_tokens(self.access_token, self.refresh_token)
             return True
-        return False
+        if status in (400, 401, 403):
+            return False
+        raise AmperiumError(f"Token refresh failed (HTTP {status})")
 
     # ------------------------------------------------------------------ #
     # Data

@@ -35,5 +35,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: AmperiumConfigEntry) ->
 
 
 async def _async_reload_entry(hass: HomeAssistant, entry: AmperiumConfigEntry) -> None:
-    """Reload the config entry when options change."""
+    """Reload the config entry when the options change.
+
+    The entry is also updated whenever a refreshed token is stored; that must
+    not restart the integration, so only a changed options dict reloads it.
+    """
+    if dict(entry.options) == entry.runtime_data.options_snapshot:
+        return
     await hass.config_entries.async_reload(entry.entry_id)

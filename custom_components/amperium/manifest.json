@@ -3,10 +3,10 @@
   "name": "Finnås Kraftlag (Amperium)",
   "codeowners": ["@zanzei26"],
   "config_flow": true,
-  "documentation": "https://github.com/zanzei26/Amperium-Hacs",
+  "documentation": "https://github.com/zanzei26/Amperium-Hacs-Finnaas-kraftlag",
   "integration_type": "service",
   "iot_class": "cloud_polling",
-  "issue_tracker": "https://github.com/zanzei26/Amperium-Hacs/issues",
+  "issue_tracker": "https://github.com/zanzei26/Amperium-Hacs-Finnaas-kraftlag/issues",
   "requirements": [],
   "version": "0.2.0"
 }

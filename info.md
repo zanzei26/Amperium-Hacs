@@ -21,4 +21,4 @@ Strømforbruk, kostnad og pris **direkte fra Finnås Kraftlag** via Amperium-pla
 
 Passordløs innlogging med engangskode én gang; token fornyes automatisk i bakgrunnen.
 
-Se [README](https://github.com/zanzei26/Amperium-Hacs) for detaljer.
+Se [README](https://github.com/zanzei26/Amperium-Hacs-Finnaas-kraftlag) for detaljer.

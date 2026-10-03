@@ -117,8 +117,12 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
     async def _async_update_data(self) -> dict[str, Any]:
         """Fetch data. Refreshed tokens are stored by ``_persist_tokens``."""
+        # The month starts at local midnight (not 00:00 UTC), like the hourly data.
+        _, month_start, _ = local_month_bounds(
+            dt_util.utcnow().astimezone(dt_util.DEFAULT_TIME_ZONE)
+        )
         try:
-            data = await self.client.async_fetch(self._site_id)
+            data = await self.client.async_fetch(self._site_id, month_start)
         except AmperiumAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
         except AmperiumError as err:

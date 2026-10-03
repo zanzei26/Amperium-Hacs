@@ -22,11 +22,12 @@ from .const import CONF_POWER_ENTITY, CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
 from .coordinator import AmperiumCoordinator
 from .derived import (
     SIGNAL_STATES,
-    add_amounts,
+    choose_power_now,
     compensation_difference,
     compensation_for_scheme,
     consumer_price,
-    gross_grid_rent,
+    gross_grid_from_net,
+    gross_total_from_net,
     han_signal_state,
     net_for_scheme,
     net_with_norgespris,
@@ -214,7 +215,10 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         icon="mdi:transmission-tower",
         suggested_display_precision=2,
         value_fn=lambda d: _round(
-            gross_grid_rent(d.get("grid_total"), d.get("grid_compensation")), 2
+            gross_grid_from_net(
+                d.get("cost_grid_rent"), d.get("grid_compensation"), d.get("grid_total")
+            ),
+            2,
         ),
     ),
     AmperiumSensorDescription(
@@ -240,10 +244,8 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         icon="mdi:cash-multiple",
         suggested_display_precision=2,
         value_fn=lambda d: _round(
-            add_amounts(
-                d.get("cost_energy"),
-                gross_grid_rent(d.get("grid_total"), d.get("grid_compensation")),
-                d.get("fixed_total"),
+            gross_total_from_net(
+                d.get("cost_total"), d.get("fixed_total"), d.get("grid_compensation")
             ),
             2,
         ),
@@ -490,14 +492,19 @@ async def async_setup_entry(
 ) -> None:
     """Set up Amperium sensors from a config entry."""
     coordinator = entry.runtime_data
-    entities: list[SensorEntity] = [
-        AmperiumSensor(coordinator, entry, description) for description in SENSORS
-    ]
 
+    # Optional: the user's own power sensor (for example a local HAN reader).
+    # "Power now" follows it, because Amperium only reports power once an hour.
     power_entity = entry.options.get(CONF_POWER_ENTITY)
+    tracker: LivePowerTracker | None = None
     if power_entity:
         tracker = LivePowerTracker(hass, power_entity)
         entry.async_on_unload(tracker.async_start())
+
+    entities: list[SensorEntity] = [
+        AmperiumSensor(coordinator, entry, description, tracker) for description in SENSORS
+    ]
+    if tracker is not None:
         entities.append(AmperiumLivePowerSensor(tracker, entry, "live_power"))
         entities.append(AmperiumLivePowerSensor(tracker, entry, "hour_power_forecast"))
 
@@ -511,7 +518,16 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
     _attr_has_entity_name = True
     # Hourly price lists are large and change daily; keep them out of the DB.
     _unrecorded_attributes = frozenset(
-        {"prices_today", "prices_tomorrow", "consumption_today", "tiers", "peaks"}
+        {
+            "prices_today",
+            "prices_tomorrow",
+            "consumption_today",
+            "tiers",
+            "peaks",
+            "source",
+            "local_entity",
+            "amperium_kw",
+        }
     )
 
     def __init__(
@@ -519,10 +535,12 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         coordinator: AmperiumCoordinator,
         entry: AmperiumConfigEntry,
         description: AmperiumSensorDescription,
+        tracker: LivePowerTracker | None = None,
     ) -> None:
-        """Initialise the sensor."""
+        """Initialise the sensor (``tracker`` is only used by "power now")."""
         super().__init__(coordinator)
         self.entity_description = description
+        self._tracker = tracker if description.key == "power_now" else None
         site_id = entry.data[CONF_SITE_ID]
         site_name = entry.data.get(CONF_SITE_NAME) or f"Site {site_id}"
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
@@ -533,9 +551,27 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             model="HAN / kraftlag",
         )
 
+    async def async_added_to_hass(self) -> None:
+        """Follow the local power sensor too, if one was chosen."""
+        await super().async_added_to_hass()
+        if self._tracker is not None:
+            self.async_on_remove(self._tracker.add_listener(self._handle_local_update))
+
+    @callback
+    def _handle_local_update(self) -> None:
+        self.async_write_ha_state()
+
+    def _power_now(self) -> tuple[float | None, str | None]:
+        """Power now in kW and its source: the local sensor, else Amperium."""
+        local = self._tracker.snapshot()["kw"] if self._tracker is not None else None
+        amperium = _round((self.coordinator.data or {}).get("power_now"), 3)
+        return choose_power_now(local, amperium)
+
     @property
     def native_value(self) -> Any:
         """Return the current value."""
+        if self.entity_description.key == "power_now":
+            return _round(self._power_now()[0], 3)
         if not self.coordinator.data:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
@@ -543,10 +579,16 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Expose the last-updated timestamp from the meter."""
+        key = self.entity_description.key
+        if key == "power_now":
+            return {
+                "source": self._power_now()[1],
+                "local_entity": self._tracker.entity_id if self._tracker else None,
+                "amperium_kw": _round((self.coordinator.data or {}).get("power_now"), 3),
+            }
         data = self.coordinator.data
         if not data:
             return None
-        key = self.entity_description.key
         if key == "energy_month":
             return {"updated": data.get("updated")}
         if key == "energy_last_hour":

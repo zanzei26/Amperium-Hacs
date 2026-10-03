@@ -34,6 +34,23 @@ def complete_hours(buckets: list[dict[str, Any]], now: dt.datetime) -> list[dict
     return [seen[k] for k in sorted(seen)]
 
 
+def choose_power_now(
+    local_kw: float | None, amperium_kw: float | None
+) -> tuple[float | None, str | None]:
+    """Pick the "power now" value and say where it came from.
+
+    A reading from the user's own Home Assistant power sensor wins, because
+    Amperium only reports power once an hour. Amperium's value is the fallback
+    (no local sensor chosen, or it is unavailable). Returns (kW, source) with
+    source "local_sensor", "amperium" or None.
+    """
+    if local_kw is not None:
+        return local_kw, "local_sensor"
+    if amperium_kw is not None:
+        return amperium_kw, "amperium"
+    return None, None
+
+
 def days_until(timestamp: Any, now: dt.datetime) -> float | None:
     """Days from ``now`` until an ISO-8601 timestamp (None if unknown/invalid)."""
     if not isinstance(timestamp, str):
@@ -332,6 +349,36 @@ def gross_grid_rent(grid_total: Any, compensation: Any) -> float | None:
     if grid_total is None or compensation is None:
         return None
     return float(grid_total) + abs(float(compensation))
+
+
+def gross_grid_from_net(
+    grid_after: Any, compensation: Any, fallback_total: Any = None
+) -> float | None:
+    """This month's grid rent BEFORE subsidy, built on the figure shown as "after".
+
+    "After" comes from /api/sites (every poll) and the subsidy from the charges
+    response (hourly). Adding the subsidy to the very figure that is shown as
+    "after" makes "before - subsidy = after" hold exactly, whatever the age of
+    the two sources. ``fallback_total`` (the charges response's own total) is
+    used only while /api/sites has no figure. Last month has no /api/sites
+    figure and keeps using ``gross_grid_rent``.
+    """
+    if grid_after is None:
+        grid_after = fallback_total
+    if grid_after is None or compensation is None:
+        return None
+    return float(grid_after) + subsidy_applied(compensation)
+
+
+def gross_total_from_net(total_after: Any, fixed_total: Any, compensation: Any) -> float | None:
+    """This month's total BEFORE subsidy, including the fixed fee.
+
+    = total after subsidy (/api/sites) + fixed fee + subsidy, so that
+    "total before - subsidy - fixed fee = total after" holds exactly.
+    """
+    if compensation is None:
+        return None
+    return add_amounts(total_after, fixed_total, subsidy_applied(compensation))
 
 
 def net_with_subsidy(site_total: Any, fixed_total: Any) -> float | None:

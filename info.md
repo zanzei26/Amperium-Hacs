@@ -6,7 +6,7 @@ Strømforbruk, kostnad og pris **direkte fra Finnås Kraftlag** via Amperium-pla
 
 ## Sensorer
 - Forbruk denne måneden / i dag (kWh)
-- Effekt nå (kW)
+- Effekt nå (kW), fra din egen effektsensor hvis du velger en
 - Total kostnad, energikostnad og nettleie hittil i måneden (kr)
 - Offisiell spotpris nå (kr/kWh)
 - Laveste, høyeste og gjennomsnittlig timepris i dag (kr/kWh)

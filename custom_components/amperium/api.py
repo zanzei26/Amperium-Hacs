@@ -207,22 +207,26 @@ class AmperiumClient:
                 status, data = await self._request("GET", path, auth=True)
         return status, data
 
-    async def _get_sites_raw(self) -> tuple[int, Any]:
-        """GET /api/sites for the current month, refreshing the token on 401."""
+    async def _get_sites_raw(
+        self, month_start: datetime.datetime | None = None
+    ) -> tuple[int, Any]:
+        """GET /api/sites for the current month, refreshing the token on 401.
+
+        ``month_start`` is the start of the month as an aware datetime: local
+        midnight on the 1st, so the month totals cover the same hours as the
+        hourly data. Without it the month starts at 00:00 UTC, which is 01:00
+        or 02:00 local time in Norway.
+        """
         now = datetime.datetime.now(datetime.timezone.utc)
-        frm = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        path = (
-            "/api/sites?charges_from=%s&charges_to=%s"
-            % (
-                frm.strftime("%Y-%m-%dT%H:%M:%SZ"),
-                now.strftime("%Y-%m-%dT%H:%M:%SZ"),
-            )
-        )
+        frm = month_start or now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        path = "/api/sites?charges_from=%s&charges_to=%s" % (_iso_z(frm), _iso_z(now))
         return await self._auth_get(path)
 
-    async def async_get_sites(self) -> list[dict[str, Any]]:
+    async def async_get_sites(
+        self, month_start: datetime.datetime | None = None
+    ) -> list[dict[str, Any]]:
         """Return the list of sites for this account."""
-        status, data = await self._get_sites_raw()
+        status, data = await self._get_sites_raw(month_start)
         if status == 401:
             raise AmperiumAuthError("Access/refresh token no longer valid")
         if status != 200 or not isinstance(data, list):
@@ -333,9 +337,11 @@ class AmperiumClient:
             raise AmperiumError(f"GET {label} failed (HTTP {status})")
         return data
 
-    async def async_fetch(self, site_id: int) -> dict[str, Any]:
+    async def async_fetch(
+        self, site_id: int, month_start: datetime.datetime | None = None
+    ) -> dict[str, Any]:
         """Fetch and normalise the current-month data for one site."""
-        sites = await self.async_get_sites()
+        sites = await self.async_get_sites(month_start)
         site = next((s for s in sites if s.get("siteId") == site_id), None)
         if site is None:
             if not sites:

@@ -5,6 +5,7 @@ import asyncio
 import datetime as dt
 
 import pytest
+from zoneinfo import ZoneInfo
 
 from conftest import api, derived, hourpower
 
@@ -212,8 +213,10 @@ class _ScriptedClient(api.AmperiumClient):
         super().__init__(None, **kwargs)
         self._script = {k: list(v) for k, v in script.items()}
         self.calls = []
+        self.paths = []  # full paths, with the query string
 
     async def _request(self, method, path, **kwargs):
+        self.paths.append(path)
         self.calls.append((method, path.split("?")[0]))
         key = path.split("?")[0]
         return self._script[key].pop(0)
@@ -393,3 +396,117 @@ def test_days_until_handles_offsets_and_naive_stamps():
 @pytest.mark.parametrize("bad", [None, "", "not a date", 12345])
 def test_days_until_unknown_is_none(bad):
     assert derived.days_until(bad, NOW) is None
+
+
+# --- month starts at local midnight, not 00:00 UTC ---------------------------------
+OSLO = ZoneInfo("Europe/Oslo")
+
+
+def _sites_query(month_start):
+    client = _ScriptedClient({"/api/sites": [(200, [])]}, access_token="a", refresh_token="r")
+    asyncio.run(client.async_get_sites(month_start))
+    return client.paths[0]
+
+
+def test_sites_month_starts_at_local_midnight_in_summer_time():
+    start = derived.local_month_bounds(dt.datetime(2026, 10, 3, 19, 45, tzinfo=OSLO))[1]
+    # 1 October 00:00 in Oslo (UTC+2) is 22:00 UTC on 30 September, not 00:00 UTC.
+    assert "charges_from=2026-09-30T22:00:00Z" in _sites_query(start)
+
+
+def test_sites_month_starts_at_local_midnight_in_winter_time():
+    start = derived.local_month_bounds(dt.datetime(2026, 12, 5, 12, tzinfo=OSLO))[1]
+    assert "charges_from=2026-11-30T23:00:00Z" in _sites_query(start)  # UTC+1
+
+
+def test_sites_month_start_is_independent_of_the_tz_it_is_given_in():
+    in_utc = dt.datetime(2026, 9, 30, 22, tzinfo=UTC)
+    in_oslo = dt.datetime(2026, 10, 1, 0, tzinfo=OSLO)
+    assert _sites_query(in_utc).split("&")[0] == _sites_query(in_oslo).split("&")[0]
+
+
+def test_sites_without_month_start_keeps_the_old_utc_month():
+    query = _sites_query(None)
+    assert "charges_from=" in query and "T00:00:00Z&" in query
+
+
+def test_local_month_bounds_across_the_clock_change():
+    # The clocks go back on 25 October 2026: October starts at UTC+2, November at UTC+1.
+    prev, this, nxt = derived.local_month_bounds(dt.datetime(2026, 11, 10, 12, tzinfo=OSLO))
+    assert prev.astimezone(UTC) == dt.datetime(2026, 9, 30, 22, tzinfo=UTC)
+    assert this.astimezone(UTC) == dt.datetime(2026, 10, 31, 23, tzinfo=UTC)
+    assert nxt.astimezone(UTC) == dt.datetime(2026, 11, 30, 23, tzinfo=UTC)
+
+
+# --- "power now": local sensor first, Amperium as fallback ----------------------------
+def test_power_now_prefers_the_local_sensor():
+    assert derived.choose_power_now(2.5, 0.0) == (2.5, "local_sensor")
+
+
+def test_power_now_local_zero_is_a_real_reading():
+    # 0.0 kW from the local sensor must not be mistaken for "no value".
+    assert derived.choose_power_now(0.0, 1.2) == (0.0, "local_sensor")
+
+
+def test_power_now_falls_back_to_amperium_when_local_is_missing():
+    assert derived.choose_power_now(None, 1.2) == (1.2, "amperium")
+
+
+def test_power_now_without_any_value():
+    assert derived.choose_power_now(None, None) == (None, None)
+
+
+def test_power_now_local_value_from_the_live_tracker_units():
+    # The tracker hands over kW already converted by to_kw (W, kW and MW supported).
+    assert derived.choose_power_now(hourpower.to_kw("2500", "W"), None) == (2.5, "local_sensor")
+    assert derived.choose_power_now(hourpower.to_kw("unavailable", "W"), 0.4) == (0.4, "amperium")
+
+
+# --- before/after subsidy must add up (live figures from 3 October) -------------------
+def test_grid_before_minus_subsidy_equals_after():
+    before = derived.gross_grid_from_net(326.87, 154.12 + 5.07, 326.12)  # comp = 159.19
+    assert before == pytest.approx(326.87 + 159.19)
+    assert before == pytest.approx(486.06)
+    assert before - derived.subsidy_applied(159.19) == pytest.approx(326.87)  # = "after", exactly
+
+
+def test_grid_gross_does_not_depend_on_the_age_of_the_charges_total():
+    # charges said 326.12 an hour ago; /api/sites says 326.87 now. "After" wins.
+    assert derived.gross_grid_from_net(326.87, 159.19, 326.12) == pytest.approx(486.06)
+
+
+def test_grid_gross_falls_back_to_charges_total_without_site_figure():
+    assert derived.gross_grid_from_net(None, 159.19, 326.12) == pytest.approx(485.31)
+
+
+@pytest.mark.parametrize("compensation", [159.19, -159.19])
+def test_grid_gross_is_sign_independent(compensation):
+    assert derived.gross_grid_from_net(326.87, compensation) == pytest.approx(486.06)
+
+
+def test_grid_gross_unknown_without_subsidy_or_figures():
+    assert derived.gross_grid_from_net(326.87, None) is None
+    assert derived.gross_grid_from_net(None, 159.19) is None
+
+
+def test_total_before_minus_subsidy_minus_fixed_equals_total_after():
+    total_after, fixed, comp = 689.56, 25.0, 159.19
+    gross = derived.gross_total_from_net(total_after, fixed, comp)
+    assert gross == pytest.approx(873.75)
+    assert gross - derived.subsidy_applied(comp) - fixed == pytest.approx(total_after)
+
+
+def test_total_gross_equals_energy_plus_gross_grid_plus_fixed():
+    energy, grid_after, fixed, comp = 362.69, 326.87, 25.0, 159.19
+    via_parts = energy + derived.gross_grid_from_net(grid_after, comp) + fixed
+    assert derived.gross_total_from_net(energy + grid_after, fixed, comp) == pytest.approx(via_parts)
+
+
+def test_total_gross_unknown_when_a_part_is_missing():
+    assert derived.gross_total_from_net(689.56, None, 159.19) is None
+    assert derived.gross_total_from_net(None, 25.0, 159.19) is None
+    assert derived.gross_total_from_net(689.56, 25.0, None) is None
+
+
+def test_last_month_still_uses_charges_figures():
+    assert derived.gross_grid_rent(-139.97, 100.0) == pytest.approx(-39.97)

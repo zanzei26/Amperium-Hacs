@@ -20,14 +20,14 @@ Sensorer per anlegg:
 |---|---|
 | `sensor.*_forbruk_denne_maneden` | Forbruk hittil i måneden (kWh) |
 | `sensor.*_forbruk_i_dag` | Forbruk i dag (kWh) |
-| `sensor.*_effekt_na` | Effekt nå (kW) |
+| `sensor.*_effekt_na` | Effekt nå (kW). Følger din egen effektsensor hvis du har valgt en, ellers Amperiums verdi (oppdateres en gang i timen) |
 | «Energikostnad brutto denne måneden» | Energi hittil i måneden, brutto inkl. mva, før støtte (kr), fra månedstallene |
 | «Nettleie etter straumstøtte denne måneden» | Nettleie inkl. kapasitetsledd, **etter** straumstøtte og **uten** fastledd (kr) |
 | «Total kostnad etter straumstøtte denne måneden» | Energi + nettleie som over, **uten** fastledd (kr). Dette er Amperiums eget månedstall |
 | «… forrige måned» (energi, nettleie, total) | De samme tre tallene for forrige måned (kr) |
-| «Nettleie før straumstøtte denne måneden» | Nettleie inkl. kapasitetsledd, før støtte, uten fastledd (kr). Postene ligger som attributter |
+| «Nettleie før straumstøtte denne måneden» | Nettleie inkl. kapasitetsledd, før støtte, uten fastledd (kr): «Nettleie etter straumstøtte» + støtten, så før − støtte = etter. Postene ligger som attributter (fra kostnadssvaret, kan avvike noen øre) |
 | «Fastledd denne måneden» | Fast månedlig avgift (kr). Den er ikke med i månedstallene over |
-| «Total brutto denne måneden» | Energi + nettleie + fastledd, før støtte (kr) |
+| «Total brutto denne måneden» | Energi + nettleie + fastledd, før støtte (kr): «Total kostnad etter straumstøtte» + fastledd + støtten |
 | «Kapasitetsgrunnlag denne måneden» (kW) | Effekten kapasitetsleddet beregnes av, med trinnet og trinntabellen som attributter |
 | «Kapasitetsleddet denne måneden» (kr) og «Til neste kapasitetstrinn» (kW) | Beløpet for trinnet du er i, og hvor mange kW det er til neste trinn. Samme for forrige måned |
 | `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh), uten mva og påslag |
@@ -77,9 +77,13 @@ Noen ting å vite:
 
 ### Live effekt fra en sensor du allerede har (valgfritt)
 
-Amperium oppdaterer effekt bare én gang i timen. Under **Konfigurer** kan du velge en eksisterende effektsensor i Home Assistant, for eksempel **Tibber Pulse/Watty**. Da får du to ekstra sensorer:
+Amperium oppdaterer effekt bare én gang i timen. Under **Konfigurer** kan du velge en eksisterende effektsensor i Home Assistant, for eksempel en lokal HAN-leser eller **Tibber Pulse/Watty**.
 
-- **Effekt nå (live)**: speiler sensoren din, omregnet til kW (W, kW og MW støttes).
+**«Effekt nå»** følger da sensoren din (omregnet til kW, fra og med 0.10.0). Er sensoren utilgjengelig eller uten enhet (W, kW eller MW), brukes Amperiums verdi som reserve. Attributtet `source` viser hva som er brukt (`local_sensor` eller `amperium`), `local_entity` hvilken entitet, og `amperium_kw` hva Amperium selv oppgir. Har du ikke valgt noen sensor, viser «Effekt nå» Amperiums verdi, som bare oppdateres en gang i timen.
+
+I tillegg får du to ekstra sensorer:
+
+- **Effekt nå (live)**: speiler sensoren din, omregnet til kW (W, kW og MW støttes). Samme verdi som «Effekt nå» når sensoren virker.
 - **Timeeffekt denne timen (prognose)**: kapasitetsleddet bygger på snittet av hver hele time, ikke på øyeblikkseffekt. Sensoren regner ut timesnittet så langt (tidsvektet) og anslår hvor timen ender hvis effekten holder seg. Attributtene viser snittet så langt og hvor stor del av timen som hadde målinger (`coverage`).
 
 Velg en sensor som måler **hele huset**. En lader som Easee viser bare laderens effekt og passer ikke til kapasitetsleddet. Prognosen starter på nytt hvis Home Assistant startes midt i en time. Da regnes den ut fra målingene som finnes, og `coverage` viser det.
@@ -95,7 +99,7 @@ Amperiums månedstall er lettere å misforstå enn de ser ut til. Dette er hva t
 
 Derfor regnes sensorene slik:
 
-- **Total brutto** = energi + nettleie før støtte + fastledd.
+- **Total brutto** = Amperiums månedstotal (etter støtte) + fastledd + støtten. Det er det samme som energi + nettleie før støtte + fastledd. Tallene er bygget på samme kilde, så før − støtte = etter, og total brutto − støtte − fastledd = total kostnad etter støtte. Støtten hentes sjeldnere enn månedstallene og kan henge inntil én time etter.
 - **Netto med straumstøtte** = Amperiums månedstotal (som allerede er etter støtte) + fastledd.
 - **Netto med Norgespris** = Amperiums månedstotal + fastledd + straumstøtten lagt tilbake − Norgespris-kompensasjonen. Straumstøtte gjelder ikke på Norgespris.
 - **Norgespris sparer** = Norgespris-kompensasjon − straumstøtten som er trukket fra nettleien (`gridRent`, det som faktisk er trukket på fakturaen). Det finnes bare ett støttetall: «Straumstøtte trukket fra nettleien denne måneden».
@@ -128,6 +132,14 @@ Tabellen er den samme som Amperium selv leverer, og integrasjonen leser trinnene
 - **Terskel for ny kapasitetstopp:** Den tredje høyeste døgntoppen. Et nytt døgn må ha en time over dette for å heve grunnlaget.
 
 Timedata fra Amperium kommer med litt forsinkelse, så den pågående timen er ikke med. Har du valgt en effektsensor (se over), viser «Timeeffekt denne timen (prognose)» attributtene `capacity_threshold_kw` og `above_threshold`. Da ser du om timen er på vei over terskelen.
+
+**Kapasitetsgrunnlag: riktig fra første dag.** Integrasjonen henter kraftlagets egne timedata for hele måneden. Kapasitetsgrunnlaget (snittet av høyeste time i hvert av de tre høyeste døgnene) blir derfor riktig selv om du installerer integrasjonen midt i måneden. Lokale kalkulatorer som måler effekt selv, for eksempel fra en HAN-leser, kjenner bare timene etter at de ble satt opp, og kan vise for lavt grunnlag den første måneden. Eksempel fra en installasjon 2. oktober 2026 kl. 21:36: en lokal kalkulator viste 3,29 kW (trinn 2–5 kW), mens riktig grunnlag var 6,38 kW (trinn 5–10 kW). Tallet 3,29 er oppgitt av brukeren og er ikke kontrollert av meg.
+
+Vil du unngå nye topper, bruk «Terskel for ny kapasitetstopp» og attributtet `above_threshold` på «Timeeffekt denne timen (prognose)».
+
+### Når måneden starter
+
+Alle månedstall («denne måneden») regnes fra kl. 00:00 **lokal tid** den 1. i måneden (norsk tid, med sommertid), og stemmer da med timedata og dag/natt-fordelingen. Fra og med 0.10.0. Før det startet hovedhentingen kl. 00:00 UTC, det vil si 01:00 eller 02:00 lokal tid.
 
 ### Dag og natt
 

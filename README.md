@@ -1,5 +1,7 @@
 # Amperium for Home Assistant
 
+[![Åpne i Home Assistant og legg til i HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=zanzei26&repository=Amperium-Hacs&category=integration)
+
 Henter strømforbruk, kostnad og pris **direkte fra kraftlaget ditt** via Amperium-plattformen (Finnås Kraftlag m.fl.) – de samme tallene som står på fakturaen og i Amperium-appen, rett inn i Home Assistant.
 
 > _Unofficial Home Assistant integration for the Amperium cloud platform used by several Norwegian power companies. Passwordless OTP login, HAN meter data as native sensors._

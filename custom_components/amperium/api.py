@@ -20,6 +20,10 @@ class AmperiumAuthError(AmperiumError):
     """Authentication failed / token no longer valid."""
 
 
+class AmperiumRateLimitError(AmperiumError):
+    """Too many OTP codes requested today (Amperium daily limit)."""
+
+
 class AmperiumClient:
     """Minimal async client for api.amperium.cloud.
 
@@ -77,11 +81,22 @@ class AmperiumClient:
     # ------------------------------------------------------------------ #
     async def request_otp(self, phone: str) -> None:
         """Ask Amperium to send a one-time code by SMS to this phone number."""
-        status, _ = await self._request(
+        status, data = await self._request(
             "POST", "/api/accounts/login/request-otp", json={"phoneNumber": phone}
         )
-        if status not in (200, 202, 204):
-            raise AmperiumError(f"request-otp failed (HTTP {status})")
+        if status in (200, 202, 204):
+            return
+        # Surface the server's own message where we can.
+        detail = ""
+        error_code = None
+        if isinstance(data, dict):
+            detail = data.get("title") or data.get("detail") or ""
+            error_code = data.get("errorCode")
+        if error_code == 100104 or (
+            "too many" in detail.lower() and "one time password" in detail.lower()
+        ):
+            raise AmperiumRateLimitError(detail or "Too many OTP codes requested today")
+        raise AmperiumError(detail or f"request-otp failed (HTTP {status})")
 
     async def login_otp(self, phone: str, code: str) -> dict[str, Any]:
         """Exchange the OTP code for access + refresh tokens."""

@@ -9,7 +9,12 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
-from .api import AmperiumAuthError, AmperiumClient, AmperiumError
+from .api import (
+    AmperiumAuthError,
+    AmperiumClient,
+    AmperiumError,
+    AmperiumRateLimitError,
+)
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_PHONE,
@@ -48,6 +53,8 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
             client = AmperiumClient(session)
             try:
                 await client.request_otp(phone)
+            except AmperiumRateLimitError:
+                errors["base"] = "too_many_otp"
             except AmperiumError:
                 errors["base"] = "request_otp_failed"
             else:

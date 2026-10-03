@@ -36,6 +36,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=1,
         value_fn=lambda d: _round(d.get("energy_month"), 2),
     ),
     AmperiumSensorDescription(
@@ -44,6 +45,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
         state_class=SensorStateClass.TOTAL_INCREASING,
+        suggested_display_precision=2,
         value_fn=lambda d: _round(d.get("energy_today"), 2),
     ),
     AmperiumSensorDescription(
@@ -52,6 +54,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfPower.KILO_WATT,
         device_class=SensorDeviceClass.POWER,
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=2,
         value_fn=lambda d: _round(d.get("power_now"), 3),
     ),
     AmperiumSensorDescription(
@@ -60,6 +63,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement="kr",
         icon="mdi:cash-multiple",
         state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
         value_fn=lambda d: _round(d.get("cost_total"), 2),
     ),
     AmperiumSensorDescription(
@@ -68,6 +72,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement="kr",
         icon="mdi:cash",
         state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
         value_fn=lambda d: _round(d.get("cost_energy"), 2),
     ),
     AmperiumSensorDescription(
@@ -76,6 +81,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement="kr",
         icon="mdi:transmission-tower",
         state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
         value_fn=lambda d: _round(d.get("cost_grid_rent"), 2),
     ),
     AmperiumSensorDescription(
@@ -84,6 +90,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         native_unit_of_measurement="kr/kWh",
         icon="mdi:chart-line",
         state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
         value_fn=lambda d: _round(d.get("spot_price"), 4),
     ),
 )

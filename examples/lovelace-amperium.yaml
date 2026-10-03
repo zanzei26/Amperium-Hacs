@@ -1,51 +1,75 @@
-# Eksempel på Lovelace-kort for Amperium.
-# Bytt ut entitets-ID-ene hvis dine heter noe annet (sjekk Utviklerverktøy → Tilstander).
-# Lim inn via dashbordets råkonfig-editor (⋮ → Rediger dashbord → ⋮ → Rediger i YAML),
-# eller legg kortene inn med "Legg til kort → Manuell".
+# Eksempel-dashboard for Amperium – kun innebygde Home Assistant-kort.
+# Ingen ekstra HACS-kort kreves.
+#
+# VIKTIG om entitets-ID-er:
+# Integrasjonen samler alt under én enhet "Amperium – <anlegget ditt>", og
+# entitets-ID-ene inkluderer anleggsnavnet, f.eks.:
+#   sensor.amperium_<anleggsnavn>_forbruk_denne_maneden
+# ID-ene under er KORTE plassholdere. Bytt dem med dine egne:
+#   Utviklerverktøy → Tilstander → søk "amperium"
+# eller bygg kortene i UI-editoren og velg entitetene fra lista.
+#
+# Lim inn via: dashbord → ⋮ Rediger → ⋮ → Rediger i YAML (hele dashbordet),
+# eller legg hvert kort inn med "Legg til kort → Manuell".
 
-type: vertical-stack
-cards:
-  - type: markdown
-    content: >
-      ## Strøm – kraftlagets tall
-      HAN-måler:
-      {% if is_state('binary_sensor.amperium_han_maler_online','on') %}🟢 online{% else %}🔴 offline{% endif %}
+title: Amperium
+views:
+  - title: Strøm
+    path: amperium
+    icon: mdi:flash
+    cards:
+      - type: glance
+        title: Nå
+        columns: 3
+        state_color: true
+        entities:
+          - entity: sensor.amperium_forbruk_i_dag
+            name: I dag
+          - entity: sensor.amperium_effekt_na
+            name: Effekt
+          - entity: sensor.amperium_spotpris_na
+            name: Spotpris
 
-  - type: entities
-    title: Forbruk & kostnad denne måneden
-    state_color: true
-    entities:
-      - entity: sensor.amperium_forbruk_denne_maneden
+      - type: gauge
+        entity: sensor.amperium_forbruk_denne_maneden
         name: Forbruk denne måneden
-      - entity: sensor.amperium_forbruk_i_dag
-        name: Forbruk i dag
-      - entity: sensor.amperium_effekt_na
-        name: Effekt nå
-      - type: divider
-      - entity: sensor.amperium_kostnad_denne_maneden
-        name: Total kostnad
-      - entity: sensor.amperium_energikostnad_denne_maneden
-        name: — herav energi
-      - entity: sensor.amperium_nettleie_denne_maneden
-        name: — herav nettleie
-      - type: divider
-      - entity: sensor.amperium_spotpris_na
-        name: Spotpris nå
+        unit: kWh
+        needle: true
+        min: 0
+        max: 2000          # juster til ditt normale månedsforbruk
+        severity:
+          green: 0
+          yellow: 1400
+          red: 1800
 
-  - type: gauge
-    entity: sensor.amperium_forbruk_denne_maneden
-    name: Forbruk denne måneden
-    unit: kWh
-    min: 0
-    max: 2000
-    needle: true
+      - type: entities
+        title: Kostnad hittil i måneden
+        state_color: true
+        entities:
+          - entity: sensor.amperium_kostnad_denne_maneden
+            name: Total kostnad
+          - type: divider
+          - entity: sensor.amperium_energikostnad_denne_maneden
+            name: Energi
+          - entity: sensor.amperium_nettleie_denne_maneden
+            name: Nettleie
+          - type: divider
+          - entity: sensor.amperium_forbruk_denne_maneden
+            name: Forbruk denne måneden
+          - entity: sensor.amperium_spotpris_na
+            name: Spotpris nå
 
-  # Historikk (bruker HA sin innebygde statistikk)
-  - type: statistics-graph
-    title: Kostnad hittil i måneden
-    chart_type: line
-    period: day
-    stat_types:
-      - state
-    entities:
-      - sensor.amperium_kostnad_denne_maneden
+      - type: statistics-graph
+        title: Kostnad hittil i måneden (utvikling)
+        chart_type: line
+        period: day
+        stat_types:
+          - state
+        entities:
+          - sensor.amperium_kostnad_denne_maneden
+
+      - type: history-graph
+        title: Effekt siste døgn
+        hours_to_show: 24
+        entities:
+          - sensor.amperium_effekt_na

@@ -7,6 +7,7 @@ from homeassistant.components.binary_sensor import (
     BinarySensorDeviceClass,
     BinarySensorEntity,
 )
+from homeassistant.const import EntityCategory
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -32,6 +33,7 @@ class AmperiumHanSensor(CoordinatorEntity[AmperiumCoordinator], BinarySensorEnti
     _attr_has_entity_name = True
     _attr_translation_key = "han_online"
     _attr_device_class = BinarySensorDeviceClass.CONNECTIVITY
+    _attr_entity_category = EntityCategory.DIAGNOSTIC
 
     def __init__(
         self, coordinator: AmperiumCoordinator, entry: AmperiumConfigEntry

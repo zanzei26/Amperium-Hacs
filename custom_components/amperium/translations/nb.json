@@ -24,6 +24,7 @@
       }
     },
     "error": {
+      "too_many_otp": "For mange engangskoder bedt om i dag. Vent 24 timer og prøv igjen (døgngrense hos kraftlaget).",
       "request_otp_failed": "Klarte ikke sende kode. Sjekk telefonnummeret og prøv igjen.",
       "invalid_otp": "Koden er feil eller utløpt.",
       "cannot_connect": "Fikk ikke kontakt med Amperium.",

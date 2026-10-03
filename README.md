@@ -89,7 +89,7 @@ Velg en sensor som måler **hele huset**. En lader som Easee viser bare laderens
 Amperiums månedstall er lettere å misforstå enn de ser ut til. Dette er hva tallene faktisk inneholder, utledet fra en ekte konto (oktober). **Det er ikke bekreftet av Amperium.**
 
 - **Nettleie i månedstallene er allerede etter straumstøtte.** Nettleien består av energiledd dag og natt, elavgift, Enova-avgift og **kapasitetsleddet**, minus straumstøtten. Regnestykket går opp på øre: 46,31 + 20,15 + 14,09 + 1,98 + 400 (kapasitetstrinn 5–10 kW) − 154,12 (støtte) = 328,41, mot oppgitt 328,40. Derfor kan nettleien bli negativ i en måned med mye støtte.
-- **Fastleddet er ikke med** i nettleien eller i total fra månedstallene. Det kommer i tillegg (egen sensor).
+- **Fastleddet er ikke med** i nettleien eller i total fra månedstallene. Det kommer i tillegg (egen sensor). Det ser ut til å være satt per periode og ikke per dag (observert 25 kr for tre dager i oktober og 50 kr for hele september), så det kan hoppe.
 - **Energi** (brutto, spot + påslag inkl. mva) er før støtte.
 - Beløpene ser ut til å være **inkludert mva**.
 
@@ -102,7 +102,7 @@ Derfor regnes sensorene slik:
 
 Du velger ordningen (Norgespris eller straumstøtte) når du setter opp integrasjonen, og kan endre den under **Konfigurer**. «Netto kostnad denne måneden» bruker valgt ordning. Har du ikke valgt (eldre installasjon), er den utilgjengelig til du velger.
 
-Tallene er **omtrentlige**: kompensasjon og energi summeres fra hele timer, mens månedstallene kan ligge noen timer foran eller bak. Bruk dem som peiling, ikke som faktura. Eksempelkortet [`examples/lovelace-kostnad.yaml`](examples/lovelace-kostnad.yaml) viser oppsettet.
+Støtten leses uten hensyn til fortegn (den er alltid et fradrag). Tallene for **forrige måned** hentes fra samme kostnadssvar: nettleie etter støtte er `gridRent.totalAmount`, total er svarets `totalAmount`, og energi er differansen (avledet). Tallene er **omtrentlige**: kompensasjon og energi summeres fra hele timer, mens månedstallene kan ligge noen timer foran eller bak. Bruk dem som peiling, ikke som faktura. Eksempelkortet [`examples/lovelace-kostnad.yaml`](examples/lovelace-kostnad.yaml) viser oppsettet.
 
 ### Kapasitetsledd
 
@@ -114,7 +114,7 @@ Har du valgt en effektsensor (se over), viser «Timeeffekt denne timen (prognose
 
 ### Dag og natt
 
-Dag/natt-forbruket summeres fra timedata i **lokal tid**. Standard er dag kl. 06–22 og natt resten. Du kan endre timene under **Innstillinger → Enheter og tjenester → Amperium → Konfigurer**. Helg og helligdager behandles ikke spesielt. Sjekk hos nettselskapet at nettleien din faktisk deler døgnet slik.
+Dag/natt-forbruket for denne måneden hentes direkte fra Amperium (`gridRent.importedEnergyDay/Night`), slik nettleien faktisk deles. Hvis Amperium ikke leverer dem, summeres det fra timedata i **lokal tid** med dag kl. 06–22 og natt resten. Timene kan endres under **Innstillinger → Enheter og tjenester → Amperium → Konfigurer** og gjelder bare i det tilfellet.
 
 ### Timepriser
 

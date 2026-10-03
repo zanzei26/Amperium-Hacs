@@ -178,15 +178,6 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise
             except AmperiumError as err:
                 _LOGGER.debug("Could not fetch Norgespris comparison: %s", err)
-            last_charges = None
-            try:
-                last_charges = await client.async_get_site_charges(
-                    site, prev_start, this_start
-                )
-            except AmperiumAuthError:
-                raise
-            except AmperiumError as err:
-                _LOGGER.debug("Could not fetch last month's charges: %s", err)
         except AmperiumAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
 
@@ -197,10 +188,14 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         new.update(summarise_charges(charges, now, tz))
         for suffix, response in grid_responses.items():
             new.update(summarise_grid(response, suffix))
-        if last_charges:
-            new["cost_energy_last_month"] = last_charges["energy"]
-            new["cost_grid_rent_last_month"] = last_charges["grid_rent"]
-            new["cost_last_month"] = last_charges["total"]
+        # The billing split of day/night kWh comes straight from Amperium
+        # (gridRent); prefer it over our own hour-of-day classification.
+        for api_key, own_key in (
+            ("grid_energy_day_kwh", "energy_day_month"),
+            ("grid_energy_night_kwh", "energy_night_month"),
+        ):
+            if new.get(api_key) is not None:
+                new[own_key] = new[api_key]
         if norgespris is not None:
             new["norgespris_minus_subsidy"] = norgespris["norgespris_minus_subsidy"]
             new["norgespris_details"] = norgespris

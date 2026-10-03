@@ -182,6 +182,17 @@ def summarise_grid(
         },
     }
     out.update(_capacity_tier(grid, resp.get("capacity_intervals") or [], suffix))
+    out[f"grid_energy_day_kwh{suffix}"] = grid.get("energy_day_kwh")
+    out[f"grid_energy_night_kwh{suffix}"] = grid.get("energy_night_kwh")
+    if suffix == "_last_month":
+        # Month-level figures for the previous month come from this response;
+        # /api/sites only reports the current month.
+        outer, total = resp.get("outer_total"), grid["total"]
+        out["cost_last_month"] = outer
+        out["cost_grid_rent_last_month"] = total
+        out["cost_energy_last_month"] = (
+            outer - total if outer is not None and total is not None else None
+        )
     return out
 
 
@@ -229,11 +240,13 @@ def _capacity_tier(
 def subsidy_applied(compensation: Any) -> float | None:
     """The straumstotte applied in the grid rent, as a positive amount.
 
-    Amperium reports it as a negative ``compensationAmount`` in gridRent.
+    Amperium has been seen to report it as a positive number; an earlier
+    reading suggested a negative one. It is always a deduction, so the sign
+    is ignored: the magnitude is what counts.
     """
     if compensation is None:
         return None
-    return -float(compensation)
+    return abs(float(compensation))
 
 
 def add_amounts(*values: Any) -> float | None:
@@ -246,12 +259,12 @@ def add_amounts(*values: Any) -> float | None:
 def gross_grid_rent(grid_total: Any, compensation: Any) -> float | None:
     """Grid rent (incl. capacity charge) BEFORE straumstotte.
 
-    gridRent.totalAmount is after the subsidy, so add it back:
-    gross = total - compensation (compensation is negative).
+    gridRent.totalAmount is after the subsidy, so the subsidy is added back:
+    gross = total + |compensation| (sign-independent, see subsidy_applied).
     """
     if grid_total is None or compensation is None:
         return None
-    return float(grid_total) - float(compensation)
+    return float(grid_total) + abs(float(compensation))
 
 
 def net_with_subsidy(site_total: Any, fixed_total: Any) -> float | None:

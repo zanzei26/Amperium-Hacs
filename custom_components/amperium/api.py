@@ -170,27 +170,6 @@ class AmperiumClient:
             raise AmperiumError(f"GET /api/sites failed (HTTP {status})")
         return data
 
-    async def async_get_site_charges(
-        self, site_id: int, start: datetime.datetime, end: datetime.datetime
-    ) -> dict[str, Any]:
-        """Return energy, grid rent and total cost for [start, end).
-
-        Same /api/sites endpoint as the main poll; charges_from/charges_to
-        decide which period the charges fields cover, so this gives monthly
-        history (e.g. last month's grid rent).
-        """
-        path = f"/api/sites?charges_from={_iso_z(start)}&charges_to={_iso_z(end)}"
-        data = await self._get_list(path, "sites")
-        site = next((s for s in data if s.get("siteId") == site_id), None)
-        if site is None:
-            raise AmperiumError("Site not found in /api/sites response")
-        charges = site.get("chargesForCurrentMonth") or {}
-        return {
-            "energy": charges.get("amountEnergy"),
-            "grid_rent": charges.get("amountGridRent"),
-            "total": charges.get("totalAmount"),
-        }
-
     async def async_get_prices(
         self, site_id: int, start: datetime.datetime, end: datetime.datetime
     ) -> list[dict[str, Any]]:
@@ -241,6 +220,7 @@ class AmperiumClient:
 
         Response parts:
         - ``energy``: hourly energy buckets (gross energy, subsidy, Norgespris).
+        - ``outer_total``: energy + grid rent after subsidy, excl. fixed fee.
         - ``grid``: ONE aggregate for the whole period (grid rent items,
           capacity charge, subsidy applied; ``total`` is after subsidy).
         - ``fixed_total``: the fixed monthly fee, which is outside /api/sites.
@@ -272,6 +252,7 @@ class AmperiumClient:
                 for b in data.get("energy") or []
                 if isinstance(b, dict)
             ],
+            "outer_total": _opt(data.get("totalAmount")),
             "grid": _parse_grid(data.get("gridRent")),
             "fixed_total": _opt(fixed.get("totalAmount")) if isinstance(fixed, dict) else None,
             "capacity_intervals": [
@@ -383,13 +364,16 @@ def _parse_grid(grid: Any) -> dict[str, Any] | None:
     return {
         # After subsidy; equals amountGridRent in /api/sites.
         "total": _opt(grid.get("totalAmount")),
-        # Negative when a subsidy is applied against the grid rent.
+        # The straumstotte applied against the grid rent. Reported as a
+        # positive amount in live data; use abs() when reading, never the sign.
         "compensation": _opt(grid.get("compensationAmount")),
         "sales_tax": _opt(grid.get("salesTaxAmount")),
         "capacity_avg_kw": _opt(grid.get("capacityChargeAveragePower")),
         "capacity_min_kw": _opt(interval.get("powerMin")),
         "capacity_max_kw": _opt(interval.get("powerMax")),
         "capacity_amount": _opt(interval.get("amount")),
+        "energy_day_kwh": _opt(grid.get("importedEnergyDay")),
+        "energy_night_kwh": _opt(grid.get("importedEnergyNight")),
         "energy_day": _opt(grid.get("energyChargeDayAmount")),
         "energy_night": _opt(grid.get("energyChargeNightAmount")),
         "electricity_fee": _opt(grid.get("electricityFeeAmount")),

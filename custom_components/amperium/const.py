@@ -31,5 +31,16 @@ CONF_SITE_NAME = "site_name"
 # How often to poll the API (seconds). The HAN meter data updates hourly.
 DEFAULT_SCAN_INTERVAL = 900
 
+# Hours (local time) counted as "day" for the day/night consumption split.
+# Configurable in the integration options. Weekends are not treated specially.
+CONF_DAY_START = "day_start"
+CONF_DAY_END = "day_end"
+DEFAULT_DAY_START = 6
+DEFAULT_DAY_END = 22
+
+# Extended data (hourly consumption/charges, support comparison) is heavier,
+# so it is fetched less often than the main data.
+EXTENDED_SCAN_INTERVAL = 3600
+
 # Default request timeout (seconds)
 REQUEST_TIMEOUT = 30

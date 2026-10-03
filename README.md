@@ -28,9 +28,38 @@ Sensorer per anlegg:
 | `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen som attributt |
 | `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen som attributt |
 | `sensor.*_spotpris_snitt_i_dag` | Gjennomsnittlig timepris i dag (kr/kWh) |
-| `binary_sensor.*_han_maler_online` | Om HAN-måleren er online |
+| `sensor.*_forbruk_i_gar` | Forbruk i går (kWh), summert fra timedata i lokal tid |
+| `sensor.*_forbruk_siste_time` | Forbruk siste hele time (kWh) |
+| `sensor.*_forbruk_forrige_maned` | Forbruk forrige måned (kWh) |
+| `sensor.*_forbruk_dag_denne_maneden` / `..._natt_...` | Forbruk dag og natt hittil i måneden (kWh), se «Dag og natt» |
+| `sensor.*_energikostnad_i_gar` | Energikostnad i går (kr), `totalAmount` fra timedata |
+| `sensor.*_straumstotte_denne_maneden` | Straumstøtte hittil i måneden (kr), som API-et oppgir |
+| `sensor.*_norgespris_kompensasjon_denne_maneden` | Norgespris-kompensasjon hittil i måneden (kr), som API-et oppgir |
+| `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
+| `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
+| `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
+| `binary_sensor.*_han_maler_online` | Om HAN-måleren er online (diagnostikk) |
 
-Sensorene nullstilles daglig/månedlig, så de passer best som egne dashbordkort (se [`examples/lovelace-amperium.yaml`](examples/lovelace-amperium.yaml)). Energidashbordet i Home Assistant vil helst ha en kumulativ livstidsmåler, så forbruket til Energidashbordet bør fortsatt hentes fra HAN-måleren/Tibber, ikke fra disse månedssensorene.
+Sensorene nullstilles daglig/månedlig, så de passer best som egne dashbordkort (se [`examples/lovelace-amperium.yaml`](examples/lovelace-amperium.yaml)).
+
+### Energidashbordet
+
+Integrasjonen importerer **timeforbruk** (og energikostnad, og eksport hvis du har solceller) som langtidsstatistikk i Home Assistant, rundt en gang i timen. Gå til **Innstillinger → Dashbord → Energi** og velg følgende statistikk:
+
+| I Energidashbordet | Velg |
+|---|---|
+| Nettforbruk | `Amperium forbruk` |
+| Kostnad: «Bruk en entitet som sporer totalkostnaden» | `Amperium energikostnad` |
+| Retur til nett (hvis du har solceller) | `Amperium eksport` |
+
+Noen ting å vite:
+- Statistikken fylles ut for forrige og inneværende måned første gang. Eldre historikk importeres ikke.
+- Tallene kommer med forsinkelse fra Amperium (HAN-måleren oppdateres time for time), så siste time kan mangle en stund.
+- `Amperium energikostnad` er `totalAmount` fra Amperiums timedata. Det er ikke verifisert mot fakturaen, og det er uklart om nettleie er med. Sjekk mot en faktura før du stoler på den.
+
+### Dag og natt
+
+Dag/natt-forbruket summeres fra timedata i **lokal tid**. Standard er dag kl. 06–22 og natt resten. Du kan endre timene under **Innstillinger → Enheter og tjenester → Amperium → Konfigurer**. Helg og helligdager behandles ikke spesielt. Sjekk hos nettselskapet at nettleien din faktisk deler døgnet slik.
 
 ### Timepriser
 
@@ -63,6 +92,11 @@ Amperium bruker passordløs OTP-innlogging i tillegg til en statisk app-nøkkel 
 3. Fornyer ved behov: `POST /api/accounts/login/refresh-token` (kun når access-token er utløpt)
 4. Henter data: `GET /api/sites?charges_from=…&charges_to=…`
 5. Henter timepriser: `GET /api/sites/{id}/prices?from=…&to=…` (i dag og i morgen)
+6. Henter timeforbruk: `GET /api/sites/{id}/consumption/energy?from=…&to=…&resolution=H`
+7. Henter kostnad: `GET /api/sites/{id}/consumption/charges?from=…&to=…&resolution=H`
+8. Henter støttesammenligning: `GET /api/sites/{id}/consumption/norgespris-vs-subsidy?from=…&to=…`
+
+`resolution` må være én bokstav (`H`, `D` eller `M`). Ord og tall avvises av API-et. Timedata hentes høyst en gang i timen.
 
 Polling hvert 15. minutt (HAN-måleren oppdateres time for time).
 

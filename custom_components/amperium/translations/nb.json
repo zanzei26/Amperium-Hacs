@@ -36,19 +36,92 @@
   },
   "entity": {
     "sensor": {
-      "energy_month": { "name": "Forbruk denne måneden" },
-      "energy_today": { "name": "Forbruk i dag" },
-      "power_now": { "name": "Effekt nå" },
-      "cost_total": { "name": "Kostnad denne måneden" },
-      "cost_energy": { "name": "Energikostnad denne måneden" },
-      "cost_grid_rent": { "name": "Nettleie denne måneden" },
-      "spot_price": { "name": "Spotpris nå" },
-      "price_min_today": { "name": "Laveste spotpris i dag" },
-      "price_max_today": { "name": "Høyeste spotpris i dag" },
-      "price_avg_today": { "name": "Spotpris snitt i dag" }
+      "energy_month": {
+        "name": "Forbruk denne måneden"
+      },
+      "energy_today": {
+        "name": "Forbruk i dag"
+      },
+      "power_now": {
+        "name": "Effekt nå"
+      },
+      "cost_total": {
+        "name": "Kostnad denne måneden"
+      },
+      "cost_energy": {
+        "name": "Energikostnad denne måneden"
+      },
+      "cost_grid_rent": {
+        "name": "Nettleie denne måneden"
+      },
+      "spot_price": {
+        "name": "Spotpris nå"
+      },
+      "energy_yesterday": {
+        "name": "Forbruk i går"
+      },
+      "energy_last_hour": {
+        "name": "Forbruk siste time"
+      },
+      "energy_last_month": {
+        "name": "Forbruk forrige måned"
+      },
+      "energy_day_month": {
+        "name": "Forbruk dag denne måneden"
+      },
+      "energy_night_month": {
+        "name": "Forbruk natt denne måneden"
+      },
+      "energy_export_month": {
+        "name": "Eksport denne måneden"
+      },
+      "energy_export_today": {
+        "name": "Eksport i dag"
+      },
+      "cost_yesterday": {
+        "name": "Energikostnad i går"
+      },
+      "subsidy_month": {
+        "name": "Straumstøtte denne måneden"
+      },
+      "norgespris_month": {
+        "name": "Norgespris-kompensasjon denne måneden"
+      },
+      "norgespris_minus_subsidy": {
+        "name": "Norgespris minus straumstøtte forrige måned"
+      },
+      "han_signal": {
+        "name": "HAN-signal"
+      },
+      "price_min_today": {
+        "name": "Laveste spotpris i dag"
+      },
+      "price_max_today": {
+        "name": "Høyeste spotpris i dag"
+      },
+      "price_avg_today": {
+        "name": "Spotpris snitt i dag"
+      }
     },
     "binary_sensor": {
-      "han_online": { "name": "HAN-måler online" }
+      "han_online": {
+        "name": "HAN-måler online"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Dag-/nattimer",
+        "description": "Timer (lokal tid) som regnes som dag. Alle andre timer regnes som natt. Helg og helligdager behandles ikke spesielt.",
+        "data": {
+          "day_start": "Dag starter (time, 0-23)",
+          "day_end": "Dag slutter (time, 1-24)"
+        }
+      }
+    },
+    "error": {
+      "invalid_day_hours": "Dagen må starte før den slutter."
     }
   }
 }

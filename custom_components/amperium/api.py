@@ -188,6 +188,85 @@ class AmperiumClient:
             raise AmperiumError(f"GET /api/sites/{{id}}/prices failed (HTTP {status})")
         return [_normalise_price(b) for b in data if isinstance(b, dict)]
 
+    async def async_get_energy(
+        self, site_id: int, start: datetime.datetime, end: datetime.datetime
+    ) -> list[dict[str, Any]]:
+        """Return hourly consumption for [start, end).
+
+        resolution must be a single letter (H, D or M); words and numbers are
+        rejected by the API. We always ask for H and aggregate ourselves in
+        local time.
+        """
+        path = (
+            f"/api/sites/{site_id}/consumption/energy"
+            f"?from={_iso_z(start)}&to={_iso_z(end)}&resolution=H"
+        )
+        data = await self._get_list(path, "consumption/energy")
+        return [
+            {
+                "start": _parse_dt(b.get("from")),
+                "end": _parse_dt(b.get("to")),
+                "import": _num(b.get("importedEnergy")),
+                "export": _num(b.get("exportedEnergy")),
+            }
+            for b in data
+            if isinstance(b, dict)
+        ]
+
+    async def async_get_charges(
+        self, site_id: int, start: datetime.datetime, end: datetime.datetime
+    ) -> list[dict[str, Any]]:
+        """Return hourly charges for [start, end) (resolution=H)."""
+        path = (
+            f"/api/sites/{site_id}/consumption/charges"
+            f"?from={_iso_z(start)}&to={_iso_z(end)}&resolution=H"
+        )
+        status, data = await self._auth_get(path)
+        if status == 401:
+            raise AmperiumAuthError("Access/refresh token no longer valid")
+        if status != 200 or not isinstance(data, dict):
+            raise AmperiumError(f"GET consumption/charges failed (HTTP {status})")
+        return [
+            {
+                "start": _parse_dt(b.get("from")),
+                "end": _parse_dt(b.get("to")),
+                "total": _num(b.get("totalAmount")),
+                "subsidy": _num(b.get("importedCompensationAmount")),
+                "norgespris": _num(b.get("importedCompensationAmountNorgespris")),
+            }
+            for b in data.get("energy") or []
+            if isinstance(b, dict)
+        ]
+
+    async def async_get_norgespris_vs_subsidy(
+        self, site_id: int, start: datetime.datetime, end: datetime.datetime
+    ) -> dict[str, Any]:
+        """Compare Norgespris with the electricity subsidy for a full month."""
+        path = (
+            f"/api/sites/{site_id}/consumption/norgespris-vs-subsidy"
+            f"?from={_iso_z(start)}&to={_iso_z(end)}"
+        )
+        status, data = await self._auth_get(path)
+        if status == 401:
+            raise AmperiumAuthError("Access/refresh token no longer valid")
+        if status != 200 or not isinstance(data, dict):
+            raise AmperiumError(f"GET norgespris-vs-subsidy failed (HTTP {status})")
+        return {
+            "imported_energy": _num(data.get("importedEnergy")),
+            "subsidy_amount": _num(data.get("importedCompensationAmount")),
+            "norgespris_amount": _num(data.get("importedCompensationAmountNorgespris")),
+            "norgespris_minus_subsidy": _num(data.get("norgesprisMinusSubsidy")),
+        }
+
+    async def _get_list(self, path: str, label: str) -> list[Any]:
+        """Authenticated GET that must return a JSON array."""
+        status, data = await self._auth_get(path)
+        if status == 401:
+            raise AmperiumAuthError("Access/refresh token no longer valid")
+        if status != 200 or not isinstance(data, list):
+            raise AmperiumError(f"GET {label} failed (HTTP {status})")
+        return data
+
     async def async_fetch(self, site_id: int) -> dict[str, Any]:
         """Fetch and normalise the current-month data for one site."""
         sites = await self.async_get_sites()
@@ -214,6 +293,10 @@ class AmperiumClient:
             "surcharge": price.get("surcharge"),
             "vat_percent": price.get("salesTaxPercentage"),
             "han_online": site.get("hanPortMeterOnline"),
+            "han_signal": site.get("hanPortMeterSignal"),
+            "is_producing": site.get("isProducingEnergy"),
+            "energy_export_month": usage.get("energyExportThisMonth"),
+            "energy_export_today": usage.get("energyExportToday"),
             "updated": usage.get("energyUpdatedOn"),
         }
 
@@ -221,6 +304,27 @@ class AmperiumClient:
 def _iso_z(value: datetime.datetime) -> str:
     """Format an aware datetime as ISO-8601 UTC with a trailing Z."""
     return value.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _parse_dt(value: Any) -> datetime.datetime | None:
+    """Parse an ISO-8601 timestamp into an aware UTC datetime."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=datetime.timezone.utc)
+    return parsed.astimezone(datetime.timezone.utc)
+
+
+def _num(value: Any) -> float:
+    """Return value as float, treating missing/invalid as 0."""
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
 
 
 def _normalise_price(bucket: dict[str, Any]) -> dict[str, Any]:

@@ -11,6 +11,9 @@ Strømforbruk, kostnad og pris **direkte fra Finnås Kraftlag** via Amperium-pla
 - Offisiell spotpris nå (kr/kWh)
 - Laveste, høyeste og gjennomsnittlig timepris i dag (kr/kWh)
 - Timepriser for i dag og i morgen som attributter på spotpris-sensoren
+- Forbruk i går, siste time og forrige måned, dag/natt-fordeling, energikostnad i går
+- Straumstøtte og Norgespris-sammenligning
+- Timeforbruk importert som statistikk til Energidashbordet (velg «Amperium forbruk»)
 - HAN-måler online (binær)
 
 ## Oppsett

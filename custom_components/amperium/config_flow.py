@@ -6,7 +6,8 @@ from typing import Any
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import (
@@ -17,10 +18,14 @@ from .api import (
 )
 from .const import (
     CONF_ACCESS_TOKEN,
+    CONF_DAY_END,
+    CONF_DAY_START,
     CONF_PHONE,
     CONF_REFRESH_TOKEN,
     CONF_SITE_ID,
     CONF_SITE_NAME,
+    DEFAULT_DAY_END,
+    DEFAULT_DAY_START,
     DOMAIN,
 )
 
@@ -37,6 +42,12 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._phone: str | None = None
         self._client: AmperiumClient | None = None
         self._sites: list[dict[str, Any]] = []
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        """Return the options flow (day/night hours)."""
+        return AmperiumOptionsFlow(config_entry)
 
     # ------------------------------------------------------------------ #
     # Step 1: phone number -> request OTP
@@ -148,6 +159,43 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_SITE_ID: site_id,
                 CONF_SITE_NAME: site_name,
             },
+        )
+
+
+class AmperiumOptionsFlow(OptionsFlow):
+    """Options: which local hours count as "day" in the day/night split."""
+
+    def __init__(self, config_entry: ConfigEntry) -> None:
+        """Keep the entry we are editing."""
+        self._entry = config_entry
+
+    async def async_step_init(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Edit the day/night hours."""
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            if user_input[CONF_DAY_START] >= user_input[CONF_DAY_END]:
+                errors["base"] = "invalid_day_hours"
+            else:
+                return self.async_create_entry(data=user_input)
+
+        current = self._entry.options
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        CONF_DAY_START,
+                        default=current.get(CONF_DAY_START, DEFAULT_DAY_START),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=0, max=23)),
+                    vol.Required(
+                        CONF_DAY_END,
+                        default=current.get(CONF_DAY_END, DEFAULT_DAY_END),
+                    ): vol.All(vol.Coerce(int), vol.Range(min=1, max=24)),
+                }
+            ),
+            errors=errors,
         )
 
 

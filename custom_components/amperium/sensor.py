@@ -11,7 +11,7 @@ from homeassistant.components.sensor import (
     SensorEntityDescription,
     SensorStateClass,
 )
-from homeassistant.const import UnitOfEnergy, UnitOfPower
+from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfPower
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
@@ -92,6 +92,105 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
         value_fn=lambda d: _round(d.get("spot_price"), 4),
+    ),
+    AmperiumSensorDescription(
+        key="energy_yesterday",
+        translation_key="energy_yesterday",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("energy_yesterday"), 3),
+    ),
+    AmperiumSensorDescription(
+        key="energy_last_hour",
+        translation_key="energy_last_hour",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=3,
+        value_fn=lambda d: _round(d.get("energy_last_hour"), 3),
+    ),
+    AmperiumSensorDescription(
+        key="energy_last_month",
+        translation_key="energy_last_month",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=1,
+        value_fn=lambda d: _round(d.get("energy_last_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="energy_day_month",
+        translation_key="energy_day_month",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=1,
+        value_fn=lambda d: _round(d.get("energy_day_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="energy_night_month",
+        translation_key="energy_night_month",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        suggested_display_precision=1,
+        value_fn=lambda d: _round(d.get("energy_night_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="energy_export_month",
+        translation_key="energy_export_month",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=1,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _round(d.get("energy_export_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="energy_export_today",
+        translation_key="energy_export_today",
+        native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
+        device_class=SensorDeviceClass.ENERGY,
+        state_class=SensorStateClass.TOTAL,
+        suggested_display_precision=2,
+        entity_registry_enabled_default=False,
+        value_fn=lambda d: _round(d.get("energy_export_today"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="cost_yesterday",
+        translation_key="cost_yesterday",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("cost_yesterday"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="subsidy_month",
+        translation_key="subsidy_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("subsidy_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="norgespris_month",
+        translation_key="norgespris_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("norgespris_month"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="norgespris_minus_subsidy",
+        translation_key="norgespris_minus_subsidy",
+        native_unit_of_measurement="kr",
+        icon="mdi:scale-balance",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("norgespris_minus_subsidy"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="han_signal",
+        translation_key="han_signal",
+        icon="mdi:signal",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.get("han_signal"),
     ),
     AmperiumSensorDescription(
         key="price_min_today",
@@ -195,6 +294,8 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
                 "prices_today": data.get("prices_today", []),
                 "prices_tomorrow": data.get("prices_tomorrow", []),
             }
+        if key == "norgespris_minus_subsidy":
+            return data.get("norgespris_details")
         if key == "price_min_today":
             return {"hour": data.get("price_min_hour")}
         if key == "price_max_today":

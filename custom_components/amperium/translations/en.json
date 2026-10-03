@@ -36,19 +36,92 @@
   },
   "entity": {
     "sensor": {
-      "energy_month": { "name": "Energy this month" },
-      "energy_today": { "name": "Energy today" },
-      "power_now": { "name": "Power now" },
-      "cost_total": { "name": "Cost this month" },
-      "cost_energy": { "name": "Energy cost this month" },
-      "cost_grid_rent": { "name": "Grid rent this month" },
-      "spot_price": { "name": "Spot price now" },
-      "price_min_today": { "name": "Spot price lowest today" },
-      "price_max_today": { "name": "Spot price highest today" },
-      "price_avg_today": { "name": "Spot price average today" }
+      "energy_month": {
+        "name": "Energy this month"
+      },
+      "energy_today": {
+        "name": "Energy today"
+      },
+      "power_now": {
+        "name": "Power now"
+      },
+      "cost_total": {
+        "name": "Cost this month"
+      },
+      "cost_energy": {
+        "name": "Energy cost this month"
+      },
+      "cost_grid_rent": {
+        "name": "Grid rent this month"
+      },
+      "spot_price": {
+        "name": "Spot price now"
+      },
+      "energy_yesterday": {
+        "name": "Energy yesterday"
+      },
+      "energy_last_hour": {
+        "name": "Energy last hour"
+      },
+      "energy_last_month": {
+        "name": "Energy last month"
+      },
+      "energy_day_month": {
+        "name": "Energy day this month"
+      },
+      "energy_night_month": {
+        "name": "Energy night this month"
+      },
+      "energy_export_month": {
+        "name": "Export this month"
+      },
+      "energy_export_today": {
+        "name": "Export today"
+      },
+      "cost_yesterday": {
+        "name": "Energy cost yesterday"
+      },
+      "subsidy_month": {
+        "name": "Electricity subsidy this month"
+      },
+      "norgespris_month": {
+        "name": "Norgespris compensation this month"
+      },
+      "norgespris_minus_subsidy": {
+        "name": "Norgespris minus subsidy last month"
+      },
+      "han_signal": {
+        "name": "HAN signal"
+      },
+      "price_min_today": {
+        "name": "Spot price lowest today"
+      },
+      "price_max_today": {
+        "name": "Spot price highest today"
+      },
+      "price_avg_today": {
+        "name": "Spot price average today"
+      }
     },
     "binary_sensor": {
-      "han_online": { "name": "HAN meter online" }
+      "han_online": {
+        "name": "HAN meter online"
+      }
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Day/night hours",
+        "description": "Local hours counted as day. All other hours count as night. Weekends and holidays are not treated specially.",
+        "data": {
+          "day_start": "Day starts (hour, 0-23)",
+          "day_end": "Day ends (hour, 1-24)"
+        }
+      }
+    },
+    "error": {
+      "invalid_day_hours": "Day must start before it ends."
     }
   }
 }

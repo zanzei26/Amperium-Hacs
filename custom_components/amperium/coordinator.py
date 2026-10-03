@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import logging
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -15,11 +15,18 @@ from homeassistant.util import dt as dt_util
 from .api import AmperiumAuthError, AmperiumClient, AmperiumError, summarise_prices
 from .const import (
     CONF_ACCESS_TOKEN,
+    CONF_DAY_END,
+    CONF_DAY_START,
     CONF_REFRESH_TOKEN,
     CONF_SITE_ID,
+    DEFAULT_DAY_END,
+    DEFAULT_DAY_START,
     DEFAULT_SCAN_INTERVAL,
     DOMAIN,
+    EXTENDED_SCAN_INTERVAL,
 )
+from .derived import local_month_bounds, summarise_charges, summarise_energy
+from .statistics import async_import_statistics
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,6 +44,8 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         )
         self.entry = entry
         self._site_id = entry.data[CONF_SITE_ID]
+        self._extended: dict[str, Any] = {}
+        self._extended_at: datetime | None = None
         session = async_get_clientsession(hass)
         self.client = AmperiumClient(
             session,
@@ -56,6 +65,7 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             raise UpdateFailed(str(err)) from err
 
         data.update(await self._async_fetch_prices())
+        data.update(await self._async_fetch_extended(bool(data.get("is_producing"))))
 
         # If the access/refresh token changed (lazy refresh), persist it so
         # a restart keeps working.
@@ -107,3 +117,77 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             tomorrow = []
         result["prices_tomorrow"] = [b for b in tomorrow if b.get("spot") is not None]
         return result
+
+    async def _async_fetch_extended(self, producing: bool) -> dict[str, Any]:
+        """Fetch hourly consumption/charges and the Norgespris comparison.
+
+        Heavier than the main poll, so it runs at most once per
+        EXTENDED_SCAN_INTERVAL. Everything here is an extra: errors are logged
+        and the last good values are kept, so the main sensors keep working.
+        """
+        now = dt_util.utcnow()
+        if (
+            self._extended_at is not None
+            and (now - self._extended_at).total_seconds() < EXTENDED_SCAN_INTERVAL
+        ):
+            return self._extended
+
+        tz = dt_util.DEFAULT_TIME_ZONE
+        prev_start, this_start, _ = local_month_bounds(now.astimezone(tz))
+        hour_now = now.replace(minute=0, second=0, microsecond=0)
+        # Month-sized requests: previous month, then this month up to now.
+        windows = [(prev_start, this_start), (this_start, hour_now)]
+        client, site = self.client, self._site_id
+
+        energy: list[dict[str, Any]] = []
+        charges: list[dict[str, Any]] = []
+        energy_ok = False
+        try:
+            for start, end in windows:
+                if end <= start:
+                    continue
+                try:
+                    energy += await client.async_get_energy(site, start, end)
+                    energy_ok = True
+                except AmperiumAuthError:
+                    raise
+                except AmperiumError as err:
+                    _LOGGER.debug("Could not fetch hourly energy: %s", err)
+                try:
+                    charges += await client.async_get_charges(site, start, end)
+                except AmperiumAuthError:
+                    raise
+                except AmperiumError as err:
+                    _LOGGER.debug("Could not fetch hourly charges: %s", err)
+            norgespris = None
+            try:
+                norgespris = await client.async_get_norgespris_vs_subsidy(
+                    site, prev_start, this_start
+                )
+            except AmperiumAuthError:
+                raise
+            except AmperiumError as err:
+                _LOGGER.debug("Could not fetch Norgespris comparison: %s", err)
+        except AmperiumAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+
+        day_start = self.entry.options.get(CONF_DAY_START, DEFAULT_DAY_START)
+        day_end = self.entry.options.get(CONF_DAY_END, DEFAULT_DAY_END)
+        new: dict[str, Any] = {}
+        new.update(summarise_energy(energy, now, tz, day_start, day_end))
+        new.update(summarise_charges(charges, now, tz))
+        if norgespris is not None:
+            new["norgespris_minus_subsidy"] = norgespris["norgespris_minus_subsidy"]
+            new["norgespris_details"] = norgespris
+
+        try:
+            await async_import_statistics(
+                self.hass, site, energy, charges, producing, now
+            )
+        except Exception:  # noqa: BLE001 - statistics are optional
+            _LOGGER.warning("Could not import statistics", exc_info=True)
+
+        self._extended.update(new)
+        if energy_ok:
+            self._extended_at = now
+        return self._extended

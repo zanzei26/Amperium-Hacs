@@ -8,6 +8,7 @@ Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (
 - **Gammel feilmelding blir ikke stående.** Etter en kortvarig feil, for eksempel en `TimeoutError` under oppstart før nettverket er klart, sto `last_error` igjen på «Effekt nå (Amperium live)» i minutter etter at strømmen virket igjen. Nå nullstilles `last_error` når nye målinger kommer, så attributtet bare viser et problem som pågår. Nytt attributt `last_error_at` viser når siste feil skjedde.
 - En feil uten tekst vises som «TimeoutError (no details)» i stedet for «TimeoutError: ».
 - Første feil i en rekke logges på nivå info («trying again»). Gjentar den seg, logges den som advarsel. Før ble også en enkelt feil under oppstart logget som advarsel.
+- **Verifisert i en ekte Home Assistant 3. oktober 2026** (én kjøring, 80 sekunder etter omstart, rapportert fra Home Assistant): live-strømmen var `connected`, `messages` gikk fra 29 til 69 og `age_seconds` var 0. «Effekt nå» fulgte Tibber (`local_sensor`), og loggen hadde ingen meldinger fra Amperium eller AMQP. **Nullstillingen av `last_error` er ikke prøvd i praksis**: det kom ingen feil under oppstarten denne gangen, så de tomme feltene betyr bare at ingen feil har skjedd. Den delen er foreløpig bare dekket av de automatiske testene.
 - 4 nye tester (126 totalt). Token- og innloggingskoden er uendret.
 
 ## 0.11.2

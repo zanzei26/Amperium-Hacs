@@ -1,0 +1,50 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Amperium",
+        "description": "Log in with your Amperium / power company phone number. A one-time code (OTP) will be sent to you by SMS.",
+        "data": {
+          "phone": "Phone number"
+        }
+      },
+      "otp": {
+        "title": "Enter code",
+        "description": "Enter the one-time code sent by SMS to {phone}.",
+        "data": {
+          "otp": "One-time code"
+        }
+      },
+      "site": {
+        "title": "Choose site",
+        "description": "Your account has several sites. Choose which one to track.",
+        "data": {
+          "site_id": "Site"
+        }
+      }
+    },
+    "error": {
+      "request_otp_failed": "Could not send the code. Check the phone number and try again.",
+      "invalid_otp": "The code is invalid or expired.",
+      "cannot_connect": "Could not connect to Amperium.",
+      "no_sites": "No sites were found for this account."
+    },
+    "abort": {
+      "already_configured": "This site is already set up."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "energy_month": { "name": "Energy this month" },
+      "energy_today": { "name": "Energy today" },
+      "power_now": { "name": "Power now" },
+      "cost_total": { "name": "Cost this month" },
+      "cost_energy": { "name": "Energy cost this month" },
+      "cost_grid_rent": { "name": "Grid rent this month" },
+      "spot_price": { "name": "Spot price now" }
+    },
+    "binary_sensor": {
+      "han_online": { "name": "HAN meter online" }
+    }
+  }
+}

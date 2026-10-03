@@ -1,0 +1,50 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Amperium",
+        "description": "Logg inn med telefonnummeret du bruker hos kraftlaget/Amperium. Du får en engangskode (OTP) på SMS.",
+        "data": {
+          "phone": "Telefonnummer"
+        }
+      },
+      "otp": {
+        "title": "Skriv inn kode",
+        "description": "Skriv inn engangskoden du fikk på SMS til {phone}.",
+        "data": {
+          "otp": "Engangskode"
+        }
+      },
+      "site": {
+        "title": "Velg anlegg",
+        "description": "Kontoen din har flere anlegg. Velg hvilket du vil følge.",
+        "data": {
+          "site_id": "Anlegg"
+        }
+      }
+    },
+    "error": {
+      "request_otp_failed": "Klarte ikke sende kode. Sjekk telefonnummeret og prøv igjen.",
+      "invalid_otp": "Koden er feil eller utløpt.",
+      "cannot_connect": "Fikk ikke kontakt med Amperium.",
+      "no_sites": "Fant ingen anlegg på denne kontoen."
+    },
+    "abort": {
+      "already_configured": "Dette anlegget er allerede satt opp."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "energy_month": { "name": "Forbruk denne måneden" },
+      "energy_today": { "name": "Forbruk i dag" },
+      "power_now": { "name": "Effekt nå" },
+      "cost_total": { "name": "Kostnad denne måneden" },
+      "cost_energy": { "name": "Energikostnad denne måneden" },
+      "cost_grid_rent": { "name": "Nettleie denne måneden" },
+      "spot_price": { "name": "Spotpris nå" }
+    },
+    "binary_sensor": {
+      "han_online": { "name": "HAN-måler online" }
+    }
+  }
+}

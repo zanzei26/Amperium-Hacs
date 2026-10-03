@@ -154,11 +154,126 @@ def summarise_charges(
     return out
 
 
-def net_amount(gross_total: Any, compensation: Any) -> float | None:
-    """Gross total (energy + grid rent) minus a compensation amount."""
-    if gross_total is None or compensation is None:
+def summarise_grid(
+    resp: dict[str, Any] | None, suffix: str = ""
+) -> dict[str, Any]:
+    """Turn the charges response's grid/fixed/capacity parts into sensor values.
+
+    ``suffix`` is "" for this month and "_last_month" for the previous one.
+    """
+    if not resp or not resp.get("grid"):
+        return {}
+    grid = resp["grid"]
+    out: dict[str, Any] = {
+        f"grid_total{suffix}": grid["total"],
+        f"grid_compensation{suffix}": grid["compensation"],
+        f"fixed_total{suffix}": resp.get("fixed_total"),
+        f"capacity_avg_kw{suffix}": grid["capacity_avg_kw"],
+        f"capacity_amount{suffix}": grid["capacity_amount"],
+        f"grid_breakdown{suffix}": {
+            "capacity_charge": grid["capacity_amount"],
+            "energy_day": grid["energy_day"],
+            "energy_night": grid["energy_night"],
+            "electricity_fee": grid["electricity_fee"],
+            "enova_fee": grid["enova_fee"],
+            "membership_discount": grid["membership_discount"],
+            "subsidy_applied": subsidy_applied(grid["compensation"]),
+            "vat_included": grid["sales_tax"],
+        },
+    }
+    out.update(_capacity_tier(grid, resp.get("capacity_intervals") or [], suffix))
+    return out
+
+
+def _capacity_tier(
+    grid: dict[str, Any], intervals: list[dict[str, Any]], suffix: str
+) -> dict[str, Any]:
+    """Describe the current capacity tier and the distance to the next one."""
+    avg, tier_min, tier_max = (
+        grid["capacity_avg_kw"], grid["capacity_min_kw"], grid["capacity_max_kw"]
+    )
+    ordered = sorted(
+        (i for i in intervals if i.get("min") is not None), key=lambda i: i["min"]
+    )
+    next_tier = None
+    for index, tier in enumerate(ordered):
+        if tier["min"] == tier_min and index + 1 < len(ordered):
+            next_tier = ordered[index + 1]
+            break
+    headroom = None
+    if avg is not None and tier_max is not None:
+        headroom = tier_max - avg
+    return {
+        f"capacity_headroom_kw{suffix}": headroom,
+        f"capacity_details{suffix}": {
+            "tier_from_kw": tier_min,
+            "tier_to_kw": tier_max,
+            "tier_amount": grid["capacity_amount"],
+            "next_tier_from_kw": next_tier["min"] if next_tier else None,
+            "next_tier_amount": next_tier["amount"] if next_tier else None,
+            "extra_cost_next_tier": (
+                next_tier["amount"] - grid["capacity_amount"]
+                if next_tier
+                and next_tier["amount"] is not None
+                and grid["capacity_amount"] is not None
+                else None
+            ),
+            "tiers": [
+                {"from_kw": t["min"], "to_kw": t["max"], "amount": t["amount"]}
+                for t in ordered
+            ],
+        },
+    }
+
+
+def subsidy_applied(compensation: Any) -> float | None:
+    """The straumstotte applied in the grid rent, as a positive amount.
+
+    Amperium reports it as a negative ``compensationAmount`` in gridRent.
+    """
+    if compensation is None:
         return None
-    return float(gross_total) - float(compensation)
+    return -float(compensation)
+
+
+def add_amounts(*values: Any) -> float | None:
+    """Sum amounts; None if any of them is missing."""
+    if any(v is None for v in values):
+        return None
+    return sum(float(v) for v in values)
+
+
+def gross_grid_rent(grid_total: Any, compensation: Any) -> float | None:
+    """Grid rent (incl. capacity charge) BEFORE straumstotte.
+
+    gridRent.totalAmount is after the subsidy, so add it back:
+    gross = total - compensation (compensation is negative).
+    """
+    if grid_total is None or compensation is None:
+        return None
+    return float(grid_total) - float(compensation)
+
+
+def net_with_subsidy(site_total: Any, fixed_total: Any) -> float | None:
+    """Total cost for a customer on the regular subsidy.
+
+    /api/sites totalAmount (energy + grid rent) is already after straumstotte
+    but excludes the fixed monthly fee, so only the fixed fee is added.
+    """
+    return add_amounts(site_total, fixed_total)
+
+
+def net_with_norgespris(
+    site_total: Any, fixed_total: Any, subsidy: Any, norgespris: Any
+) -> float | None:
+    """Total cost for a Norgespris customer.
+
+    Start from the after-subsidy total, add the straumstotte back (it does
+    not apply on Norgespris) and subtract the Norgespris compensation.
+    """
+    if None in (site_total, fixed_total, subsidy, norgespris):
+        return None
+    return float(site_total) + float(fixed_total) + float(subsidy) - float(norgespris)
 
 
 def compensation_for_scheme(scheme: Any, norgespris: Any, subsidy: Any) -> float | None:
@@ -170,6 +285,17 @@ def compensation_for_scheme(scheme: Any, norgespris: Any, subsidy: Any) -> float
     else:
         return None
     return None if value is None else float(value)
+
+
+def net_for_scheme(
+    scheme: Any, site_total: Any, fixed_total: Any, subsidy: Any, norgespris: Any
+) -> float | None:
+    """Total cost for the scheme the customer has chosen."""
+    if scheme == "norgespris":
+        return net_with_norgespris(site_total, fixed_total, subsidy, norgespris)
+    if scheme == "subsidy":
+        return net_with_subsidy(site_total, fixed_total)
+    return None
 
 
 def compensation_difference(norgespris: Any, subsidy: Any) -> float | None:

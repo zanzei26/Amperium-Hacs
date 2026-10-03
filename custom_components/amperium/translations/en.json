@@ -53,13 +53,13 @@
         "name": "Power now"
       },
       "cost_total": {
-        "name": "Total cost gross this month (energy + grid rent)"
+        "name": "Total cost after subsidy this month (energy + grid rent, excl. fixed fee)"
       },
       "cost_energy": {
         "name": "Energy cost gross this month"
       },
       "cost_grid_rent": {
-        "name": "Grid rent this month"
+        "name": "Grid rent after subsidy this month (incl. capacity charge, excl. fixed fee)"
       },
       "spot_price": {
         "name": "Spot price now"
@@ -89,7 +89,7 @@
         "name": "Gross energy cost yesterday"
       },
       "subsidy_month": {
-        "name": "Electricity subsidy this month"
+        "name": "Electricity subsidy this month (summed hourly)"
       },
       "norgespris_month": {
         "name": "Norgespris compensation this month"
@@ -128,34 +128,61 @@
         "name": "VAT on energy this month"
       },
       "net_norgespris_month": {
-        "name": "Net cost with Norgespris (approx.)"
+        "name": "Net cost with Norgespris (incl. fixed fee)"
       },
       "net_subsidy_month": {
-        "name": "Net cost with electricity subsidy (approx.)"
+        "name": "Net cost with electricity subsidy (incl. fixed fee)"
       },
       "norgespris_saves_month": {
-        "name": "Norgespris saves this month (approx.)"
+        "name": "Norgespris saves this month"
       },
       "cost_energy_last_month": {
         "name": "Energy cost gross last month"
       },
       "cost_grid_rent_last_month": {
-        "name": "Grid rent last month"
+        "name": "Grid rent after subsidy last month (incl. capacity charge, excl. fixed fee)"
       },
       "cost_last_month": {
-        "name": "Total cost gross last month (energy + grid rent)"
+        "name": "Total cost after subsidy last month (energy + grid rent, excl. fixed fee)"
       },
       "compensation_month": {
         "name": "Compensation this month (your scheme)"
       },
       "net_cost_month": {
-        "name": "Net cost this month (approx.)"
+        "name": "Net cost this month (your scheme, incl. fixed fee)"
       },
       "live_power": {
         "name": "Power now (live)"
       },
       "hour_power_forecast": {
         "name": "Hour power this hour (forecast)"
+      },
+      "grid_gross_month": {
+        "name": "Grid rent before subsidy this month (incl. capacity charge, excl. fixed fee)"
+      },
+      "subsidy_applied_month": {
+        "name": "Electricity subsidy applied to grid rent this month"
+      },
+      "fixed_month": {
+        "name": "Fixed fee this month"
+      },
+      "gross_total_month": {
+        "name": "Total gross this month (energy + grid rent + fixed fee, before support)"
+      },
+      "capacity_avg_kw": {
+        "name": "Capacity basis this month"
+      },
+      "capacity_amount": {
+        "name": "Capacity charge this month"
+      },
+      "capacity_headroom_kw": {
+        "name": "To next capacity tier"
+      },
+      "capacity_avg_kw_last_month": {
+        "name": "Capacity basis last month"
+      },
+      "capacity_amount_last_month": {
+        "name": "Capacity charge last month"
       }
     },
     "binary_sensor": {

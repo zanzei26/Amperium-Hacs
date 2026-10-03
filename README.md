@@ -21,10 +21,15 @@ Sensorer per anlegg:
 | `sensor.*_forbruk_denne_maneden` | Forbruk hittil i måneden (kWh) |
 | `sensor.*_forbruk_i_dag` | Forbruk i dag (kWh) |
 | `sensor.*_effekt_na` | Effekt nå (kW) |
-| `sensor.*_kostnad_denne_maneden` | Total brutto kostnad hittil i måneden: energi + nettleie, før støtte (kr) |
-| `sensor.*_energikostnad_denne_maneden` | Energidelen av kostnaden, brutto (kr) |
-| `sensor.*_nettleie_denne_maneden` | Nettleie hittil i måneden (kr) |
-| `sensor.*_nettleie_forrige_maned`, `..._energikostnad_..._forrige_maned`, `..._kostnad_..._forrige_maned` | Samme tre tallene for forrige måned (kr) |
+| «Energikostnad brutto denne måneden» | Energi hittil i måneden, brutto inkl. mva, før støtte (kr), fra månedstallene |
+| «Nettleie etter straumstøtte denne måneden» | Nettleie inkl. kapasitetsledd, **etter** straumstøtte og **uten** fastledd (kr) |
+| «Total kostnad etter straumstøtte denne måneden» | Energi + nettleie som over, **uten** fastledd (kr). Dette er Amperiums eget månedstall |
+| «… forrige måned» (energi, nettleie, total) | De samme tre tallene for forrige måned (kr) |
+| «Nettleie før straumstøtte denne måneden» | Nettleie inkl. kapasitetsledd, før støtte, uten fastledd (kr). Postene ligger som attributter |
+| «Fastledd denne måneden» | Fast månedlig avgift (kr). Den er ikke med i månedstallene over |
+| «Total brutto denne måneden» | Energi + nettleie + fastledd, før støtte (kr) |
+| «Kapasitetsgrunnlag denne måneden» (kW) | Effekten kapasitetsleddet beregnes av, med trinnet og trinntabellen som attributter |
+| «Kapasitetsleddet denne måneden» (kr) og «Til neste kapasitetstrinn» (kW) | Beløpet for trinnet du er i, og hvor mange kW det er til neste trinn. Samme for forrige måned |
 | `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh) |
 | `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen som attributt |
 | `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen som attributt |
@@ -36,12 +41,13 @@ Sensorer per anlegg:
 | `sensor.*_energikostnad_brutto_i_gar` | Brutto energikostnad i går (kr): (spot + påslag) × kWh inkl. mva, før støtte |
 | `sensor.*_energikostnad_brutto_denne_maneden` | Brutto energikostnad hittil i måneden (kr), summert fra timedata |
 | `sensor.*_mva_pa_energi_denne_maneden` | Mva-delen av energikostnaden hittil i måneden (kr) |
-| `sensor.*_straumstotte_denne_maneden` | Straumstøtte hittil i måneden (kr), trekkes fra bruttoen |
-| `sensor.*_norgespris_kompensasjon_denne_maneden` | Norgespris-kompensasjon hittil i måneden (kr), trekkes fra bruttoen |
-| `sensor.*_kompensasjon_denne_maneden_din_ordning` | Kompensasjon for ordningen du har valgt (Norgespris eller straumstøtte) (kr) |
-| `sensor.*_netto_kostnad_denne_maneden_ca` | Total kostnad (energi + nettleie) minus kompensasjon for din ordning (kr, ca.) |
-| `sensor.*_netto_kostnad_med_norgespris_ca` / `..._med_straumstotte_ca` | Netto for hver ordning, avslått som standard |
-| `sensor.*_norgespris_sparer_denne_maneden_ca` | Norgespris-kompensasjon minus straumstøtte hittil i måneden (kr, ca.) |
+| «Straumstøtte denne måneden» | Straumstøtte summert fra timedata (kr) |
+| «Straumstøtte trukket fra nettleien denne måneden» | Straumstøtten slik den er trukket fra nettleien (kr) |
+| «Norgespris-kompensasjon denne måneden» | Norgespris-kompensasjon summert fra timedata (kr) |
+| «Kompensasjon denne måneden (din ordning)» | Beløpet for ordningen du har valgt (kr) |
+| «Netto kostnad denne måneden (din ordning)» | Total kostnad inkl. fastledd, for ordningen du har valgt (kr). Se «Kostnad: brutto, støtte og netto» |
+| «Netto kostnad med Norgespris» / «… med straumstøtte» | Netto for hver ordning, avslått som standard |
+| «Norgespris sparer denne måneden» | Hvor mye mer Norgespris gir enn straumstøtte hittil i måneden (kr) |
 | `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
 | `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
 | `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
@@ -80,15 +86,31 @@ Velg en sensor som måler **hele huset**. En lader som Easee viser bare laderens
 
 ### Kostnad: brutto, støtte og netto
 
-Amperium oppgir kostnaden i flere deler, og de må ikke blandes:
+Amperiums månedstall er lettere å misforstå enn de ser ut til. Dette er hva tallene faktisk inneholder, utledet fra en ekte konto (oktober). **Det er ikke bekreftet av Amperium.**
 
-- **Brutto energi** = (spot + påslag) × kWh inkludert mva, før støtte. Mva-delen er egen sensor.
-- **Nettleie** og **brutto total** (energi + nettleie) kommer fra månedstallene og finnes som egne sensorer, også for forrige måned. Nettleie oppgis bare per måned, ikke per dag eller time.
-- **Straumstøtte** og **Norgespris-kompensasjon** er to separate beløp som trekkes fra bruttoen. Amperium regner ut begge, så du ser hva hver ordning gir uavhengig av hvilken du er på.
-- **Total** = energi + nettleie, før støtte. Eksempelkortet [`examples/lovelace-kostnad.yaml`](examples/lovelace-kostnad.yaml) viser energi og nettleie hver for seg, så total, støtte og netto.
-- **Netto** = brutto total minus kompensasjon. Du velger ordningen (Norgespris eller straumstøtte) når du setter opp integrasjonen, og kan endre den under **Konfigurer**. Netto-sensoren bruker beløpet for ordningen du har valgt. Har du ikke valgt (eldre installasjon), er den utilgjengelig til du velger. Netto for hver ordning finnes også som egne sensorer som er avslått som standard.
+- **Nettleie i månedstallene er allerede etter straumstøtte.** Nettleien består av energiledd dag og natt, elavgift, Enova-avgift og **kapasitetsleddet**, minus straumstøtten. Regnestykket går opp på øre: 46,31 + 20,15 + 14,09 + 1,98 + 400 (kapasitetstrinn 5–10 kW) − 154,12 (støtte) = 328,41, mot oppgitt 328,40. Derfor kan nettleien bli negativ i en måned med mye støtte.
+- **Fastleddet er ikke med** i nettleien eller i total fra månedstallene. Det kommer i tillegg (egen sensor).
+- **Energi** (brutto, spot + påslag inkl. mva) er før støtte.
+- Beløpene ser ut til å være **inkludert mva**.
 
-Netto og «sparer» er **omtrentlige**: bruttoen kommer fra månedstallene, mens kompensasjonen summeres fra hele timer, og enkelte timer kan mangle eller være delvis tidlig i måneden. Bruk dem som peiling, ikke som faktura, før måneden er ferdig.
+Derfor regnes sensorene slik:
+
+- **Total brutto** = energi + nettleie før støtte + fastledd.
+- **Netto med straumstøtte** = Amperiums månedstotal (som allerede er etter støtte) + fastledd.
+- **Netto med Norgespris** = Amperiums månedstotal + fastledd + straumstøtten lagt tilbake − Norgespris-kompensasjonen. Straumstøtte gjelder ikke på Norgespris.
+- **Norgespris sparer** = Norgespris-kompensasjon − straumstøtte.
+
+Du velger ordningen (Norgespris eller straumstøtte) når du setter opp integrasjonen, og kan endre den under **Konfigurer**. «Netto kostnad denne måneden» bruker valgt ordning. Har du ikke valgt (eldre installasjon), er den utilgjengelig til du velger.
+
+Tallene er **omtrentlige**: kompensasjon og energi summeres fra hele timer, mens månedstallene kan ligge noen timer foran eller bak. Bruk dem som peiling, ikke som faktura. Eksempelkortet [`examples/lovelace-kostnad.yaml`](examples/lovelace-kostnad.yaml) viser oppsettet.
+
+### Kapasitetsledd
+
+Kapasitetsleddet bestemmes av **kapasitetsgrunnlaget**, en effekt i kW som Amperium regner ut fra månedens topper. Grunnlaget avgjør hvilket trinn du havner i. Eksempel fra Finnås: 5–10 kW koster 400 kr/måned, og 10–15 kW koster 525 kr/måned. Integrasjonen viser grunnlaget, trinnets beløp, hvor mange kW det er til neste trinn og hva neste trinn koster ekstra. Hele trinntabellen ligger som attributt.
+
+Hvor mange topper som inngår i grunnlaget, er ikke bekreftet. Det ser ut til å bygge på timetopper og ikke dagssnitt. Trinnbeløpene ser ut til å være inkludert mva. Integrasjonen regner ikke ut grunnlaget selv, men bruker Amperiums eget tall.
+
+Har du valgt en effektsensor (se over), viser «Timeeffekt denne timen (prognose)» hvor timen er på vei, så du kan sammenligne med «Til neste kapasitetstrinn».
 
 ### Dag og natt
 

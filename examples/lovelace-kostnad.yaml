@@ -1,12 +1,14 @@
-# Kostnadsoversikt: energi og nettleie hver for seg, total til slutt,
-# deretter støtte og netto. Bruker bare innebygde kort.
+# Kostnadsoversikt for denne måneden og forrige måned. Bruker bare innebygde kort.
 # Ikke testet i Home Assistant.
 #
 # Bytt entitets-ID-ene med dine egne (Utviklerverktøy → Tilstander → søk "amperium").
-# ID-ene inneholder anleggsnavnet ditt; plassholderne under er forkortet.
+# ID-ene inneholder anleggsnavnet ditt og følger navnet sensoren hadde da den ble
+# opprettet; plassholderne under er forkortet.
 #
-# Merk: nettleie finnes bare som månedstall (ikke per dag/time) fra Amperium.
-# Netto og «sparer» er omtrentlige, se README.
+# Slik henger tallene sammen (se README, «Kostnad: brutto, støtte og netto»):
+#   Total brutto = energi + nettleie før støtte + fastledd
+#   Netto        = Total brutto − kompensasjon for din ordning
+# Amperiums egen månedstotal er allerede ETTER straumstøtte og uten fastledd.
 
 type: entities
 title: Kostnad denne måneden
@@ -14,30 +16,39 @@ state_color: true
 entities:
   - entity: sensor.amperium_energikostnad_brutto_denne_maneden
     name: Energi (brutto, inkl. mva)
-  - entity: sensor.amperium_nettleie_denne_maneden
-    name: Nettleie
+  - entity: sensor.amperium_nettleie_for_straumstotte_denne_maneden
+    name: Nettleie før straumstøtte (inkl. kapasitetsledd)
+  - entity: sensor.amperium_fastledd_denne_maneden
+    name: Fastledd
   - type: divider
-  - entity: sensor.amperium_total_kostnad_brutto_denne_maneden_energi_nettleie
-    name: Total brutto (energi + nettleie)
+  - entity: sensor.amperium_total_brutto_denne_maneden
+    name: Total brutto
   - type: divider
   - entity: sensor.amperium_kompensasjon_denne_maneden_din_ordning
     name: − Kompensasjon (din ordning)
   - type: divider
-  - entity: sensor.amperium_netto_kostnad_denne_maneden_ca
+  - entity: sensor.amperium_netto_kostnad_denne_maneden_din_ordning
     name: Netto (ca.)
   - type: divider
+  - entity: sensor.amperium_straumstotte_trukket_fra_nettleien_denne_maneden
+    name: Til sammenligning, straumstøtte
   - entity: sensor.amperium_norgespris_kompensasjon_denne_maneden
     name: Til sammenligning, Norgespris
-  - entity: sensor.amperium_straumstotte_denne_maneden
-    name: Til sammenligning, straumstøtte
-  - type: divider
-  - entity: sensor.amperium_mva_pa_energi_denne_maneden
-    name: Herav mva på energi
+  - entity: sensor.amperium_norgespris_sparer_denne_maneden
+    name: Norgespris sparer
+  - type: section
+    label: Kapasitetsledd
+  - entity: sensor.amperium_kapasitetsgrunnlag_denne_maneden
+    name: Kapasitetsgrunnlag
+  - entity: sensor.amperium_kapasitetsledd_denne_maneden
+    name: Kapasitetsledd
+  - entity: sensor.amperium_til_neste_kapasitetstrinn
+    name: Til neste trinn
   - type: section
     label: Forrige måned
-  - entity: sensor.amperium_energikostnad_brutto_forrige_maned
-    name: Energi (brutto)
-  - entity: sensor.amperium_nettleie_forrige_maned
-    name: Nettleie
-  - entity: sensor.amperium_total_kostnad_brutto_forrige_maned_energi_nettleie
-    name: Total brutto
+  - entity: sensor.amperium_total_kostnad_etter_straumstotte_forrige_maned
+    name: Total etter støtte (uten fastledd)
+  - entity: sensor.amperium_kapasitetsgrunnlag_forrige_maned
+    name: Kapasitetsgrunnlag
+  - entity: sensor.amperium_kapasitetsledd_forrige_maned
+    name: Kapasitetsledd

@@ -26,7 +26,12 @@ from .const import (
     DOMAIN,
     EXTENDED_SCAN_INTERVAL,
 )
-from .derived import local_month_bounds, summarise_charges, summarise_energy
+from .derived import (
+    local_month_bounds,
+    summarise_charges,
+    summarise_energy,
+    summarise_grid,
+)
 from .statistics import async_import_statistics
 
 _LOGGER = logging.getLogger(__name__)
@@ -143,6 +148,7 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
 
         energy: list[dict[str, Any]] = []
         charges: list[dict[str, Any]] = []
+        grid_responses: dict[str, dict[str, Any] | None] = {"": None, "_last_month": None}
         energy_ok = False
         try:
             for start, end in windows:
@@ -156,7 +162,9 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 except AmperiumError as err:
                     _LOGGER.debug("Could not fetch hourly energy: %s", err)
                 try:
-                    charges += await client.async_get_charges(site, start, end)
+                    response = await client.async_get_charges(site, start, end)
+                    charges += response["energy"]
+                    grid_responses["" if start == this_start else "_last_month"] = response
                 except AmperiumAuthError:
                     raise
                 except AmperiumError as err:
@@ -187,6 +195,8 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         new: dict[str, Any] = {}
         new.update(summarise_energy(energy, now, tz, day_start, day_end))
         new.update(summarise_charges(charges, now, tz))
+        for suffix, response in grid_responses.items():
+            new.update(summarise_grid(response, suffix))
         if last_charges:
             new["cost_energy_last_month"] = last_charges["energy"]
             new["cost_grid_rent_last_month"] = last_charges["grid_rent"]

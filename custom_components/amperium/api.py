@@ -236,10 +236,15 @@ class AmperiumClient:
 
     async def async_get_charges(
         self, site_id: int, start: datetime.datetime, end: datetime.datetime
-    ) -> list[dict[str, Any]]:
-        """Return hourly charges for [start, end) (resolution=H).
+    ) -> dict[str, Any]:
+        """Return charges for [start, end) (resolution=H).
 
-        Grid rent is not part of this endpoint; it only exists in /api/sites.
+        Response parts:
+        - ``energy``: hourly energy buckets (gross energy, subsidy, Norgespris).
+        - ``grid``: ONE aggregate for the whole period (grid rent items,
+          capacity charge, subsidy applied; ``total`` is after subsidy).
+        - ``fixed_total``: the fixed monthly fee, which is outside /api/sites.
+        - ``capacity_intervals``: the full capacity-charge tier table.
         """
         path = (
             f"/api/sites/{site_id}/consumption/charges"
@@ -250,21 +255,35 @@ class AmperiumClient:
             raise AmperiumAuthError("Access/refresh token no longer valid")
         if status != 200 or not isinstance(data, dict):
             raise AmperiumError(f"GET consumption/charges failed (HTTP {status})")
-        return [
-            {
-                "start": _parse_dt(b.get("from")),
-                "end": _parse_dt(b.get("to")),
-                # Gross energy cost incl. VAT, before any subsidy (kr).
-                # totalAmount carries the same number; spotCostPrice and
-                # surchargePrice are prices per kWh, not amounts.
-                "energy": _num(b.get("importedEnergyAmount")),
-                "tax": _num(b.get("salesTaxAmount")),
-                "subsidy": _num(b.get("importedCompensationAmount")),
-                "norgespris": _num(b.get("importedCompensationAmountNorgespris")),
-            }
-            for b in data.get("energy") or []
-            if isinstance(b, dict)
-        ]
+        fixed = data.get("fixedCharges")
+        return {
+            "energy": [
+                {
+                    "start": _parse_dt(b.get("from")),
+                    "end": _parse_dt(b.get("to")),
+                    # Gross energy cost incl. VAT, before any subsidy (kr).
+                    # totalAmount carries the same number; spotCostPrice and
+                    # surchargePrice are prices per kWh, not amounts.
+                    "energy": _num(b.get("importedEnergyAmount")),
+                    "tax": _num(b.get("salesTaxAmount")),
+                    "subsidy": _num(b.get("importedCompensationAmount")),
+                    "norgespris": _num(b.get("importedCompensationAmountNorgespris")),
+                }
+                for b in data.get("energy") or []
+                if isinstance(b, dict)
+            ],
+            "grid": _parse_grid(data.get("gridRent")),
+            "fixed_total": _opt(fixed.get("totalAmount")) if isinstance(fixed, dict) else None,
+            "capacity_intervals": [
+                {
+                    "min": _opt(i.get("powerMin")),
+                    "max": _opt(i.get("powerMax")),
+                    "amount": _opt(i.get("amount")),
+                }
+                for i in data.get("capacityChargeIntervals") or []
+                if isinstance(i, dict)
+            ],
+        }
 
     async def async_get_norgespris_vs_subsidy(
         self, site_id: int, start: datetime.datetime, end: datetime.datetime
@@ -345,6 +364,38 @@ def _parse_dt(value: Any) -> datetime.datetime | None:
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=datetime.timezone.utc)
     return parsed.astimezone(datetime.timezone.utc)
+
+
+def _opt(value: Any) -> float | None:
+    """Return value as float, or None when missing/invalid."""
+    try:
+        return None if value is None else float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _parse_grid(grid: Any) -> dict[str, Any] | None:
+    """Pick out the grid-rent aggregate for a period (all amounts in kr)."""
+    if not isinstance(grid, dict):
+        return None
+    interval = grid.get("capacityInterval")
+    interval = interval if isinstance(interval, dict) else {}
+    return {
+        # After subsidy; equals amountGridRent in /api/sites.
+        "total": _opt(grid.get("totalAmount")),
+        # Negative when a subsidy is applied against the grid rent.
+        "compensation": _opt(grid.get("compensationAmount")),
+        "sales_tax": _opt(grid.get("salesTaxAmount")),
+        "capacity_avg_kw": _opt(grid.get("capacityChargeAveragePower")),
+        "capacity_min_kw": _opt(interval.get("powerMin")),
+        "capacity_max_kw": _opt(interval.get("powerMax")),
+        "capacity_amount": _opt(interval.get("amount")),
+        "energy_day": _opt(grid.get("energyChargeDayAmount")),
+        "energy_night": _opt(grid.get("energyChargeNightAmount")),
+        "electricity_fee": _opt(grid.get("electricityFeeAmount")),
+        "enova_fee": _opt(grid.get("enovaFeeAmount")),
+        "membership_discount": _opt(grid.get("membershipDiscountAmount")),
+    }
 
 
 def _num(value: Any) -> float:

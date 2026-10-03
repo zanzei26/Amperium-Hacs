@@ -13,6 +13,8 @@ Strømforbruk, kostnad og pris **direkte fra Finnås Kraftlag** via Amperium-pla
 - Timepriser for i dag og i morgen som attributter på spotpris-sensoren
 - Forbruk i går, siste time og forrige måned, dag/natt-fordeling, energikostnad i går
 - Straumstøtte og Norgespris-sammenligning
+- Nettleie med kapasitetsledd, fastledd og total brutto/netto for din ordning (Norgespris eller straumstøtte)
+- Valgfri live effekt fra en sensor du har fra før (f.eks. Tibber Pulse)
 - Timeforbruk importert som statistikk til Energidashbordet (velg «Amperium forbruk»)
 - HAN-måler online (binær)
 

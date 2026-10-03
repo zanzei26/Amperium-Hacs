@@ -22,10 +22,15 @@ from .const import CONF_POWER_ENTITY, CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
 from .coordinator import AmperiumCoordinator
 from .derived import (
     SIGNAL_STATES,
+    add_amounts,
     compensation_difference,
     compensation_for_scheme,
+    gross_grid_rent,
     han_signal_state,
-    net_amount,
+    net_for_scheme,
+    net_with_norgespris,
+    net_with_subsidy,
+    subsidy_applied,
 )
 from .live import LivePowerTracker
 
@@ -210,6 +215,90 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: _round(d.get("cost_last_month"), 2),
     ),
     AmperiumSensorDescription(
+        key="grid_gross_month",
+        translation_key="grid_gross_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:transmission-tower",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            gross_grid_rent(d.get("grid_total"), d.get("grid_compensation")), 2
+        ),
+    ),
+    AmperiumSensorDescription(
+        key="subsidy_applied_month",
+        translation_key="subsidy_applied_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-plus",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(subsidy_applied(d.get("grid_compensation")), 2),
+    ),
+    AmperiumSensorDescription(
+        key="fixed_month",
+        translation_key="fixed_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:calendar-month",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("fixed_total"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="gross_total_month",
+        translation_key="gross_total_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:cash-multiple",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(
+            add_amounts(
+                d.get("cost_energy"),
+                gross_grid_rent(d.get("grid_total"), d.get("grid_compensation")),
+                d.get("fixed_total"),
+            ),
+            2,
+        ),
+    ),
+    AmperiumSensorDescription(
+        key="capacity_avg_kw",
+        translation_key="capacity_avg_kw",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        icon="mdi:chart-bell-curve-cumulative",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_avg_kw"), 3),
+    ),
+    AmperiumSensorDescription(
+        key="capacity_amount",
+        translation_key="capacity_amount",
+        native_unit_of_measurement="kr",
+        icon="mdi:transmission-tower",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_amount"), 2),
+    ),
+    AmperiumSensorDescription(
+        key="capacity_headroom_kw",
+        translation_key="capacity_headroom_kw",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        icon="mdi:arrow-collapse-up",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_headroom_kw"), 3),
+    ),
+    AmperiumSensorDescription(
+        key="capacity_avg_kw_last_month",
+        translation_key="capacity_avg_kw_last_month",
+        native_unit_of_measurement=UnitOfPower.KILO_WATT,
+        device_class=SensorDeviceClass.POWER,
+        icon="mdi:chart-bell-curve-cumulative",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_avg_kw_last_month"), 3),
+    ),
+    AmperiumSensorDescription(
+        key="capacity_amount_last_month",
+        translation_key="capacity_amount_last_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:transmission-tower",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("capacity_amount_last_month"), 2),
+    ),
+    AmperiumSensorDescription(
         key="energy_gross_month",
         translation_key="energy_gross_month",
         native_unit_of_measurement="kr",
@@ -233,7 +322,9 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         suggested_display_precision=2,
         value_fn=lambda d: _round(
             compensation_for_scheme(
-                d.get("scheme"), d.get("norgespris_month"), d.get("subsidy_month")
+                d.get("scheme"),
+                d.get("norgespris_month"),
+                subsidy_applied(d.get("grid_compensation")),
             ),
             2,
         ),
@@ -245,11 +336,12 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         icon="mdi:cash-check",
         suggested_display_precision=2,
         value_fn=lambda d: _round(
-            net_amount(
+            net_for_scheme(
+                d.get("scheme"),
                 d.get("cost_total"),
-                compensation_for_scheme(
-                    d.get("scheme"), d.get("norgespris_month"), d.get("subsidy_month")
-                ),
+                d.get("fixed_total"),
+                subsidy_applied(d.get("grid_compensation")),
+                d.get("norgespris_month"),
             ),
             2,
         ),
@@ -259,10 +351,16 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         translation_key="net_norgespris_month",
         native_unit_of_measurement="kr",
         icon="mdi:cash-check",
-        entity_registry_enabled_default=False,
         suggested_display_precision=2,
+        entity_registry_enabled_default=False,
         value_fn=lambda d: _round(
-            net_amount(d.get("cost_total"), d.get("norgespris_month")), 2
+            net_with_norgespris(
+                d.get("cost_total"),
+                d.get("fixed_total"),
+                subsidy_applied(d.get("grid_compensation")),
+                d.get("norgespris_month"),
+            ),
+            2,
         ),
     ),
     AmperiumSensorDescription(
@@ -270,10 +368,10 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         translation_key="net_subsidy_month",
         native_unit_of_measurement="kr",
         icon="mdi:cash-check",
-        entity_registry_enabled_default=False,
         suggested_display_precision=2,
+        entity_registry_enabled_default=False,
         value_fn=lambda d: _round(
-            net_amount(d.get("cost_total"), d.get("subsidy_month")), 2
+            net_with_subsidy(d.get("cost_total"), d.get("fixed_total")), 2
         ),
     ),
     AmperiumSensorDescription(
@@ -283,7 +381,9 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         icon="mdi:scale-balance",
         suggested_display_precision=2,
         value_fn=lambda d: _round(
-            compensation_difference(d.get("norgespris_month"), d.get("subsidy_month")),
+            compensation_difference(
+                d.get("norgespris_month"), subsidy_applied(d.get("grid_compensation"))
+            ),
             2,
         ),
     ),
@@ -378,7 +478,7 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
     _attr_has_entity_name = True
     # Hourly price lists are large and change daily; keep them out of the DB.
     _unrecorded_attributes = frozenset(
-        {"prices_today", "prices_tomorrow", "consumption_today"}
+        {"prices_today", "prices_tomorrow", "consumption_today", "tiers"}
     )
 
     def __init__(
@@ -427,6 +527,12 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             }
         if key == "norgespris_minus_subsidy":
             return data.get("norgespris_details")
+        if key == "grid_gross_month":
+            return data.get("grid_breakdown")
+        if key == "capacity_avg_kw":
+            return data.get("capacity_details")
+        if key == "capacity_avg_kw_last_month":
+            return data.get("capacity_details_last_month")
         if key == "price_min_today":
             return {"hour": data.get("price_min_hour")}
         if key == "price_max_today":

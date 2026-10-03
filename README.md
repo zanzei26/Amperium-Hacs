@@ -38,6 +38,7 @@ Sensorer per anlegg:
 | `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
 | `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
 | `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
+| `sensor.*_han_signalkvalitet` | HAN-signal som tekst: Ingen signal, Dårlig, Middels, Bra, Veldig bra, Ingen data eller Ikke på nett (diagnostikk) |
 | `binary_sensor.*_han_maler_online` | Om HAN-måleren er online (diagnostikk) |
 
 Sensorene nullstilles daglig/månedlig, så de passer best som egne dashbordkort (se [`examples/lovelace-amperium.yaml`](examples/lovelace-amperium.yaml)).
@@ -56,6 +57,10 @@ Noen ting å vite:
 - Statistikken fylles ut for forrige og inneværende måned første gang. Eldre historikk importeres ikke.
 - Tallene kommer med forsinkelse fra Amperium (HAN-måleren oppdateres time for time), så siste time kan mangle en stund.
 - `Amperium energikostnad` er `totalAmount` fra Amperiums timedata. Det er ikke verifisert mot fakturaen, og det er uklart om nettleie er med. Sjekk mot en faktura før du stoler på den.
+
+### Forbruk og pris per time (graf)
+
+«Forbruk siste time» har attributtet `consumption_today` (en rad per hele time i dag), og «Spotpris nå» har `prices_today`. Eksempelet [`examples/lovelace-forbruk-og-pris.yaml`](examples/lovelace-forbruk-og-pris.yaml) viser forbruk som søyler og pris som linje med HACS-kortet apexcharts-card. Eksempelet er ikke testet.
 
 ### Dag og natt
 

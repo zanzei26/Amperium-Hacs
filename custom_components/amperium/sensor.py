@@ -20,6 +20,7 @@ from homeassistant.helpers.update_coordinator import CoordinatorEntity
 from . import AmperiumConfigEntry
 from .const import CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
 from .coordinator import AmperiumCoordinator
+from .derived import SIGNAL_STATES, han_signal_state
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -193,6 +194,14 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: d.get("han_signal"),
     ),
     AmperiumSensorDescription(
+        key="han_signal_quality",
+        translation_key="han_signal_quality",
+        device_class=SensorDeviceClass.ENUM,
+        options=[*SIGNAL_STATES.values(), "no_data", "offline"],
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: han_signal_state(d.get("han_signal"), d.get("han_online")),
+    ),
+    AmperiumSensorDescription(
         key="price_min_today",
         translation_key="price_min_today",
         native_unit_of_measurement="kr/kWh",
@@ -250,7 +259,9 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
     entity_description: AmperiumSensorDescription
     _attr_has_entity_name = True
     # Hourly price lists are large and change daily; keep them out of the DB.
-    _unrecorded_attributes = frozenset({"prices_today", "prices_tomorrow"})
+    _unrecorded_attributes = frozenset(
+        {"prices_today", "prices_tomorrow", "consumption_today"}
+    )
 
     def __init__(
         self,
@@ -287,6 +298,8 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         key = self.entity_description.key
         if key == "energy_month":
             return {"updated": data.get("updated")}
+        if key == "energy_last_hour":
+            return {"consumption_today": data.get("consumption_today", [])}
         if key == "spot_price":
             # Hourly buckets (start/end/spot/surcharge/vat_percent) for use in
             # e.g. ApexCharts cards or automations.

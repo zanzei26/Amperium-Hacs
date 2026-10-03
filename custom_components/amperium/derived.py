@@ -34,6 +34,31 @@ def complete_hours(buckets: list[dict[str, Any]], now: dt.datetime) -> list[dict
     return [seen[k] for k in sorted(seen)]
 
 
+SIGNAL_STATES = {0: "none", 1: "poor", 2: "fair", 3: "good", 4: "excellent"}
+
+
+def han_signal_state(signal: Any, online: Any) -> str | None:
+    """Map the HAN module's cellular signal (0-4) and online flag to a state.
+
+    Mirrors the official app: offline wins, then "no data" when the signal is
+    missing, otherwise 0=none, 1=poor, 2=fair, 3=good, 4=excellent (the app's
+    icon picker also treats a higher number as a stronger signal).
+    """
+    if online is False:
+        return "offline"
+    if signal is None:
+        return "no_data"
+    try:
+        return SIGNAL_STATES.get(int(signal))
+    except (TypeError, ValueError):
+        return None
+
+
+def _iso_z(value: dt.datetime) -> str:
+    """Format an aware datetime as ISO-8601 UTC with a trailing Z."""
+    return value.astimezone(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
 def summarise_energy(
     buckets: list[dict[str, Any]],
     now: dt.datetime,
@@ -53,7 +78,20 @@ def summarise_energy(
     prev_start, this_start, _ = local_month_bounds(now_local)
     yesterday = (now_local - dt.timedelta(days=1)).date()
 
-    out: dict[str, Any] = {"energy_last_hour": hours[-1]["import"]}
+    today = now_local.date()
+    out: dict[str, Any] = {
+        "energy_last_hour": hours[-1]["import"],
+        # One entry per complete local hour today, for charts (e.g. ApexCharts).
+        "consumption_today": [
+            {
+                "start": _iso_z(b["start"]),
+                "end": _iso_z(b["end"]),
+                "kwh": b["import"],
+            }
+            for b in hours
+            if b["start"].astimezone(tz).date() == today
+        ],
+    }
     yesterday_sum = month_day = month_night = last_month = 0.0
     have_yesterday = have_month = have_last = False
     for bucket in hours:

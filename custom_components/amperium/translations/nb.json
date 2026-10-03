@@ -101,6 +101,18 @@
       },
       "price_avg_today": {
         "name": "Spotpris snitt i dag"
+      },
+      "han_signal_quality": {
+        "name": "HAN-signalkvalitet",
+        "state": {
+          "none": "Ingen signal",
+          "poor": "Dårlig",
+          "fair": "Middels",
+          "good": "Bra",
+          "excellent": "Veldig bra",
+          "no_data": "Ingen data",
+          "offline": "Ikke på nett"
+        }
       }
     },
     "binary_sensor": {

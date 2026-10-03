@@ -1,0 +1,37 @@
+# Forbruk (søyler) og spotpris (linje) per time i dag, som i Amperium-appen.
+# Krever HACS-kortet "apexcharts-card" (installeres separat fra HACS → Frontend).
+# Ikke testet i Home Assistant.
+#
+# Bytt entitets-ID-ene med dine egne (Utviklerverktøy → Tilstander → søk "amperium"):
+#   - "forbruk siste time"-sensoren har attributtet consumption_today
+#   - "spotpris nå"-sensoren har attributtene prices_today og prices_tomorrow
+#
+# Prisene er i kr/kWh som Amperium oppgir dem.
+
+type: custom:apexcharts-card
+header:
+  show: true
+  title: Forbruk og pris i dag
+graph_span: 24h
+span:
+  start: day
+yaxis:
+  - id: forbruk
+    decimals: 1
+    min: 0
+  - id: pris
+    opposite: true
+    decimals: 2
+series:
+  - entity: sensor.amperium_forbruk_siste_time
+    name: Forbruk (kWh)
+    type: column
+    yaxis_id: forbruk
+    data_generator: |
+      return entity.attributes.consumption_today.map((b) => [new Date(b.start).getTime(), b.kwh]);
+  - entity: sensor.amperium_spotpris_na
+    name: Spotpris (kr/kWh)
+    type: line
+    yaxis_id: pris
+    data_generator: |
+      return entity.attributes.prices_today.map((b) => [new Date(b.start).getTime(), b.spot]);

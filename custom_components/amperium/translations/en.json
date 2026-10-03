@@ -101,6 +101,18 @@
       },
       "price_avg_today": {
         "name": "Spot price average today"
+      },
+      "han_signal_quality": {
+        "name": "HAN signal quality",
+        "state": {
+          "none": "No signal",
+          "poor": "Poor",
+          "fair": "Fair",
+          "good": "Good",
+          "excellent": "Excellent",
+          "no_data": "No data",
+          "offline": "Offline"
+        }
       }
     },
     "binary_sensor": {

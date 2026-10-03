@@ -183,6 +183,12 @@
       },
       "capacity_amount_last_month": {
         "name": "Capacity charge last month"
+      },
+      "spot_price_incl_vat": {
+        "name": "Spot price incl. VAT now (with surcharge)"
+      },
+      "norgespris_minus_subsidy_month": {
+        "name": "Norgespris minus subsidy this month"
       }
     },
     "binary_sensor": {

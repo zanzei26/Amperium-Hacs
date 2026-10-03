@@ -25,6 +25,7 @@ from .derived import (
     add_amounts,
     compensation_difference,
     compensation_for_scheme,
+    consumer_price,
     gross_grid_rent,
     han_signal_state,
     net_for_scheme,
@@ -411,6 +412,32 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: han_signal_state(d.get("han_signal"), d.get("han_online")),
     ),
     AmperiumSensorDescription(
+        key="spot_price_incl_vat",
+        translation_key="spot_price_incl_vat",
+        native_unit_of_measurement="kr/kWh",
+        icon="mdi:cash-clock",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        value_fn=lambda d: _round(
+            consumer_price(
+                d.get("spot_price")
+                if d.get("spot_price") is not None
+                else d.get("spot_price_preliminary"),
+                d.get("surcharge"),
+                d.get("vat_percent"),
+            ),
+            4,
+        ),
+    ),
+    AmperiumSensorDescription(
+        key="norgespris_minus_subsidy_month",
+        translation_key="norgespris_minus_subsidy_month",
+        native_unit_of_measurement="kr",
+        icon="mdi:scale-balance",
+        suggested_display_precision=2,
+        value_fn=lambda d: _round(d.get("norgespris_minus_subsidy_month"), 2),
+    ),
+    AmperiumSensorDescription(
         key="price_min_today",
         translation_key="price_min_today",
         native_unit_of_measurement="kr/kWh",
@@ -527,6 +554,8 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             }
         if key == "norgespris_minus_subsidy":
             return data.get("norgespris_details")
+        if key == "norgespris_minus_subsidy_month":
+            return data.get("norgespris_details_month")
         if key == "grid_gross_month":
             return data.get("grid_breakdown")
         if key == "capacity_avg_kw":

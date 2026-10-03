@@ -30,7 +30,8 @@ Sensorer per anlegg:
 | «Total brutto denne måneden» | Energi + nettleie + fastledd, før støtte (kr) |
 | «Kapasitetsgrunnlag denne måneden» (kW) | Effekten kapasitetsleddet beregnes av, med trinnet og trinntabellen som attributter |
 | «Kapasitetsleddet denne måneden» (kr) og «Til neste kapasitetstrinn» (kW) | Beløpet for trinnet du er i, og hvor mange kW det er til neste trinn. Samme for forrige måned |
-| `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh) |
+| `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh), uten mva og påslag |
+| «Spotpris inkl. mva nå (med påslag)» | Prisen du betaler per kWh nå: (spot + påslag) inkl. mva, med mva-satsen fra Amperium. Avledet, ikke bekreftet mot appen |
 | `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen som attributt |
 | `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen som attributt |
 | `sensor.*_spotpris_snitt_i_dag` | Gjennomsnittlig timepris i dag (kr/kWh) |
@@ -49,6 +50,7 @@ Sensorer per anlegg:
 | «Netto kostnad med Norgespris» / «… med straumstøtte» | Netto for hver ordning, avslått som standard |
 | «Norgespris sparer denne måneden» | Hvor mye mer Norgespris gir enn straumstøtte hittil i måneden (kr) |
 | `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
+| «Norgespris minus straumstøtte denne måneden» | Det samme for inneværende måned. Amperium oppgir ofte 0 eller tomt tidlig i måneden |
 | `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
 | `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
 | `sensor.*_han_signalkvalitet` | HAN-signal som tekst: Ingen signal, Dårlig, Middels, Bra, Veldig bra, Ingen data eller Ikke på nett (diagnostikk) |
@@ -118,7 +120,7 @@ Dag/natt-forbruket for denne måneden hentes direkte fra Amperium (`gridRent.imp
 
 ### Timepriser
 
-Sensoren **Spotpris nå** har attributtene `prices_today` og `prices_tomorrow`: lister med én rad per time (`start`, `end`, `spot`, `surcharge`, `vat_percent`, `official`). Prisene for i morgen kommer rundt midten av dagen. `spot` er offisiell spotpris når den er fastsatt, ellers foreløpig pris. Listene kan brukes i for eksempel ApexCharts eller automasjoner.
+Sensoren **Spotpris nå** har attributtene `prices_today` og `prices_tomorrow`: lister med én rad per time (`start`, `end`, `spot`, `surcharge`, `vat_percent`, `official`). Prisene for i morgen kommer rundt midten av dagen. `spot` er offisiell spotpris når den er fastsatt, ellers foreløpig pris. Hver time har også `consumer`: prisen du betaler per kWh, (spot + påslag) inkl. mva. Listene kan brukes i for eksempel ApexCharts eller automasjoner.
 
 ## Installasjon (HACS)
 

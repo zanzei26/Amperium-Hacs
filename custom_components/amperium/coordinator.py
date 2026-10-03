@@ -140,7 +140,7 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             return self._extended
 
         tz = dt_util.DEFAULT_TIME_ZONE
-        prev_start, this_start, _ = local_month_bounds(now.astimezone(tz))
+        prev_start, this_start, next_start = local_month_bounds(now.astimezone(tz))
         hour_now = now.replace(minute=0, second=0, microsecond=0)
         # Month-sized requests: previous month, then this month up to now.
         windows = [(prev_start, this_start), (this_start, hour_now)]
@@ -178,6 +178,15 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
                 raise
             except AmperiumError as err:
                 _LOGGER.debug("Could not fetch Norgespris comparison: %s", err)
+            norgespris_now = None
+            try:
+                norgespris_now = await client.async_get_norgespris_vs_subsidy(
+                    site, this_start, next_start
+                )
+            except AmperiumAuthError:
+                raise
+            except AmperiumError as err:
+                _LOGGER.debug("Could not fetch this month's Norgespris comparison: %s", err)
         except AmperiumAuthError as err:
             raise ConfigEntryAuthFailed(str(err)) from err
 
@@ -196,6 +205,9 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         ):
             if new.get(api_key) is not None:
                 new[own_key] = new[api_key]
+        if norgespris_now is not None:
+            new["norgespris_minus_subsidy_month"] = norgespris_now["norgespris_minus_subsidy"]
+            new["norgespris_details_month"] = norgespris_now
         if norgespris is not None:
             new["norgespris_minus_subsidy"] = norgespris["norgespris_minus_subsidy"]
             new["norgespris_details"] = norgespris

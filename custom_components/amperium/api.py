@@ -8,6 +8,7 @@ from typing import Any
 import aiohttp
 
 from .const import ACCEPT_LANGUAGE, API_KEY, BASE_URL, REQUEST_TIMEOUT, USER_AGENT
+from .derived import consumer_price
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -318,6 +319,7 @@ class AmperiumClient:
             "cost_energy": charges.get("amountEnergy"),
             "cost_grid_rent": charges.get("amountGridRent"),
             "spot_price": price.get("spotOfficial"),
+            "spot_price_preliminary": price.get("spotPreliminary"),
             "surcharge": price.get("surcharge"),
             "vat_percent": price.get("salesTaxPercentage"),
             "han_online": site.get("hanPortMeterOnline"),
@@ -398,13 +400,17 @@ def _normalise_price(bucket: dict[str, Any]) -> dict[str, Any]:
     """
     official = bucket.get("spotOfficial")
     spot = official if official is not None else bucket.get("spotPreliminary")
+    surcharge = bucket.get("surcharge")
+    vat_percent = bucket.get("salesTaxPercentage")
     return {
         "start": bucket.get("startTime"),
         "end": bucket.get("endTime"),
         "spot": spot,
         "official": official is not None,
-        "surcharge": bucket.get("surcharge"),
-        "vat_percent": bucket.get("salesTaxPercentage"),
+        "surcharge": surcharge,
+        "vat_percent": vat_percent,
+        # What the consumer pays per kWh: (spot + surcharge) incl. VAT.
+        "consumer": consumer_price(spot, surcharge, vat_percent),
     }
 
 

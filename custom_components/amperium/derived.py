@@ -34,6 +34,19 @@ def complete_hours(buckets: list[dict[str, Any]], now: dt.datetime) -> list[dict
     return [seen[k] for k in sorted(seen)]
 
 
+def consumer_price(spot: Any, surcharge: Any, vat_percent: Any) -> float | None:
+    """Price per kWh the consumer pays: (spot + surcharge) incl. VAT.
+
+    Same formula the old Home Assistant script used. The VAT percentage comes
+    from the API rather than being hardcoded. Derived, not confirmed by
+    Amperium; None if any part is missing.
+    """
+    try:
+        return (float(spot) + float(surcharge)) * (1 + float(vat_percent) / 100)
+    except (TypeError, ValueError):
+        return None
+
+
 SIGNAL_STATES = {0: "none", 1: "poor", 2: "fair", 3: "good", 4: "excellent"}
 
 

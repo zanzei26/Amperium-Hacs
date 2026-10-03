@@ -183,6 +183,12 @@
       },
       "capacity_amount_last_month": {
         "name": "Kapasitetsledd forrige måned"
+      },
+      "spot_price_incl_vat": {
+        "name": "Spotpris inkl. mva nå (med påslag)"
+      },
+      "norgespris_minus_subsidy_month": {
+        "name": "Norgespris minus straumstøtte denne måneden"
       }
     },
     "binary_sensor": {

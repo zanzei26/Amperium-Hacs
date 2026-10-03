@@ -1,6 +1,7 @@
 """Sensor platform for Amperium."""
 from __future__ import annotations
 
+import functools
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any
@@ -16,9 +17,22 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import dt as dt_util
 
 from . import AmperiumConfigEntry
-from .const import CONF_POWER_ENTITY, CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
+from .amqp_feed import (
+    AmperiumLiveFeed,
+    LiveFeedState,
+    async_prepare_library,
+    consume_with_aio_pika,
+)
+from .const import (
+    CONF_HAS_DOBBE,
+    CONF_POWER_ENTITY,
+    CONF_SITE_ID,
+    CONF_SITE_NAME,
+    DOMAIN,
+)
 from .coordinator import AmperiumCoordinator
 from .derived import (
     SIGNAL_STATES,
@@ -501,12 +515,34 @@ async def async_setup_entry(
         tracker = LivePowerTracker(hass, power_entity)
         entry.async_on_unload(tracker.async_start())
 
+    # Optional: Amperium's own live feed (the one the app's live power view uses).
+    live_state: LiveFeedState | None = None
+    if entry.options.get(CONF_HAS_DOBBE):
+        live_state = LiveFeedState()
+        try:
+            from homeassistant.util.ssl import get_default_context
+
+            ssl_context = get_default_context()
+        except Exception:  # noqa: BLE001 - older Home Assistant: let the library build one
+            ssl_context = None
+        feed = AmperiumLiveFeed(
+            coordinator.client,
+            entry.data[CONF_SITE_ID],
+            state=live_state,
+            consume=functools.partial(consume_with_aio_pika, ssl_context=ssl_context),
+            ensure_library=lambda: async_prepare_library(hass),
+        )
+        entry.async_create_background_task(hass, feed.run(), "amperium_live_feed")
+
     entities: list[SensorEntity] = [
-        AmperiumSensor(coordinator, entry, description, tracker) for description in SENSORS
+        AmperiumSensor(coordinator, entry, description, tracker, live_state)
+        for description in SENSORS
     ]
     if tracker is not None:
         entities.append(AmperiumLivePowerSensor(tracker, entry, "live_power"))
         entities.append(AmperiumLivePowerSensor(tracker, entry, "hour_power_forecast"))
+    if live_state is not None:
+        entities.append(AmperiumLiveFeedSensor(live_state, entry))
 
     async_add_entities(entities)
 
@@ -527,6 +563,8 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             "source",
             "local_entity",
             "amperium_kw",
+            "amperium_live_kw",
+            "live_status",
         }
     )
 
@@ -536,11 +574,14 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         entry: AmperiumConfigEntry,
         description: AmperiumSensorDescription,
         tracker: LivePowerTracker | None = None,
+        live_state: LiveFeedState | None = None,
     ) -> None:
-        """Initialise the sensor (``tracker`` is only used by "power now")."""
+        """Initialise the sensor (tracker and live feed are only used by "power now")."""
         super().__init__(coordinator)
         self.entity_description = description
-        self._tracker = tracker if description.key == "power_now" else None
+        is_power_now = description.key == "power_now"
+        self._tracker = tracker if is_power_now else None
+        self._live_state = live_state if is_power_now else None
         site_id = entry.data[CONF_SITE_ID]
         site_name = entry.data.get(CONF_SITE_NAME) or f"Site {site_id}"
         self._attr_unique_id = f"{entry.entry_id}_{description.key}"
@@ -556,16 +597,23 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         await super().async_added_to_hass()
         if self._tracker is not None:
             self.async_on_remove(self._tracker.add_listener(self._handle_local_update))
+        if self._live_state is not None:
+            self.async_on_remove(self._live_state.add_listener(self._handle_local_update))
 
     @callback
     def _handle_local_update(self) -> None:
         self.async_write_ha_state()
 
     def _power_now(self) -> tuple[float | None, str | None]:
-        """Power now in kW and its source: the local sensor, else Amperium."""
+        """Power now in kW and its source: local sensor, Amperium live, then Amperium hourly."""
         local = self._tracker.snapshot()["kw"] if self._tracker is not None else None
+        live = (
+            self._live_state.current_kw(dt_util.utcnow())
+            if self._live_state is not None
+            else None
+        )
         amperium = _round((self.coordinator.data or {}).get("power_now"), 3)
-        return choose_power_now(local, amperium)
+        return choose_power_now(local, amperium, live)
 
     @property
     def native_value(self) -> Any:
@@ -585,6 +633,12 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
                 "source": self._power_now()[1],
                 "local_entity": self._tracker.entity_id if self._tracker else None,
                 "amperium_kw": _round((self.coordinator.data or {}).get("power_now"), 3),
+                "amperium_live_kw": (
+                    self._live_state.current_kw(dt_util.utcnow())
+                    if self._live_state is not None
+                    else None
+                ),
+                "live_status": self._live_state.status if self._live_state else "off",
             }
         data = self.coordinator.data
         if not data:
@@ -702,3 +756,62 @@ class AmperiumLivePowerSensor(SensorEntity):
                 else None
             )
         return attrs
+
+
+class AmperiumLiveFeedSensor(SensorEntity):
+    """Power now straight from Amperium's live feed (only with the option switched on).
+
+    Empty when no reading has arrived in the last two minutes. The attributes say
+    how the feed is doing, which makes it easy to see whether the meter delivers.
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_translation_key = "amperium_live_power"
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _unrecorded_attributes = frozenset(
+        {"status", "messages", "age_seconds", "observed_at", "last_error"}
+    )
+
+    def __init__(self, state: LiveFeedState, entry: AmperiumConfigEntry) -> None:
+        """Initialise the sensor."""
+        self._state = state
+        site_id = entry.data[CONF_SITE_ID]
+        site_name = entry.data.get(CONF_SITE_NAME) or f"Site {site_id}"
+        self._attr_unique_id = f"{entry.entry_id}_amperium_live_power"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, str(site_id))},
+            name=f"Amperium {site_name}",
+            manufacturer="Amperium",
+            model="HAN / kraftlag",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Update whenever the feed has news."""
+        self.async_on_remove(self._state.add_listener(self._handle_update))
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the live power in kW, or None without a recent reading."""
+        value = self._state.current_kw(dt_util.utcnow())
+        return None if value is None else round(value, 3)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Say how the feed is doing."""
+        age = self._state.age_seconds(dt_util.utcnow())
+        observed = self._state.import_observed
+        return {
+            "status": self._state.status,
+            "messages": self._state.messages,
+            "age_seconds": None if age is None else round(age),
+            "observed_at": observed.isoformat() if observed else None,
+            "last_error": self._state.last_error,
+        }

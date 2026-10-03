@@ -51,6 +51,21 @@ SCHEMES = [SCHEME_NORGESPRIS, SCHEME_SUBSIDY]
 # the capacity charge to make sense; a charger like Easee does not.
 CONF_POWER_ENTITY = "power_entity"
 
+# Whether the customer has a Dobbe module (the HAN sensor that sends the meter
+# readings to Amperium). If so, live power can be read from Amperium's own AMQP
+# feed, the same one the app's live power view uses. Asked at setup and in the
+# options; off by default. Needs the "aio-pika" library, which is installed the
+# first time it is switched on.
+CONF_HAS_DOBBE = "has_dobbe"
+LIVE_REQUIREMENTS = ["aio-pika>=9.0.0"]
+# Observation ids on the feed (from the app): active power import / export.
+LIVE_OBS_IMPORT = 101
+LIVE_OBS_EXPORT = 102
+# Lifetime asked for on the subscription (the app asks for 300 s).
+LIVE_FEED_TTL_SECONDS = 300
+# A live reading older than this is not shown as "now".
+LIVE_MAX_AGE_SECONDS = 120
+
 # Hours (local time) counted as "day" for the day/night consumption split.
 # Configurable in the integration options. Weekends are not treated specially.
 CONF_DAY_START = "day_start"

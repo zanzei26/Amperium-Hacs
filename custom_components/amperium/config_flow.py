@@ -27,6 +27,7 @@ from .api import (
 from .const import (
     CONF_ACCESS_EXPIRES,
     CONF_ACCESS_TOKEN,
+    CONF_HAS_DOBBE,
     CONF_DAY_END,
     CONF_DAY_START,
     CONF_PHONE,
@@ -57,6 +58,7 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         self._client: AmperiumClient | None = None
         self._sites: list[dict[str, Any]] = []
         self._site: dict[str, Any] | None = None
+        self._scheme: str | None = None
         self._reauth_entry_id: str | None = None
 
     # ------------------------------------------------------------------ #
@@ -237,7 +239,8 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         """Ask which compensation scheme the customer is on."""
         assert self._site is not None
         if user_input is not None:
-            return await self._create_entry(self._site, user_input[CONF_SCHEME])
+            self._scheme = user_input[CONF_SCHEME]
+            return await self.async_step_dobbe()
 
         return self.async_show_form(
             step_id="scheme",
@@ -245,9 +248,29 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
         )
 
     # ------------------------------------------------------------------ #
+    # Step 5: Dobbe module or not (decides whether live power is read from Amperium)
+    # ------------------------------------------------------------------ #
+    async def async_step_dobbe(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Ask whether the customer has a Dobbe module."""
+        assert self._site is not None and self._scheme is not None
+        if user_input is not None:
+            return await self._create_entry(
+                self._site, self._scheme, user_input[CONF_HAS_DOBBE]
+            )
+
+        return self.async_show_form(
+            step_id="dobbe",
+            data_schema=vol.Schema({vol.Required(CONF_HAS_DOBBE, default=False): bool}),
+        )
+
+    # ------------------------------------------------------------------ #
     # Finish
     # ------------------------------------------------------------------ #
-    async def _create_entry(self, site: dict[str, Any], scheme: str) -> ConfigFlowResult:
+    async def _create_entry(
+        self, site: dict[str, Any], scheme: str, has_dobbe: bool = False
+    ) -> ConfigFlowResult:
         """Create (or update) the config entry for the chosen site."""
         assert self._client is not None
         site_id = site.get("siteId")
@@ -267,7 +290,7 @@ class AmperiumConfigFlow(ConfigFlow, domain=DOMAIN):
                 CONF_SITE_ID: site_id,
                 CONF_SITE_NAME: site_name,
             },
-            options={CONF_SCHEME: scheme},
+            options={CONF_SCHEME: scheme, CONF_HAS_DOBBE: has_dobbe},
         )
 
 
@@ -303,6 +326,10 @@ class AmperiumOptionsFlow(OptionsFlow):
                     ): EntitySelector(
                         EntitySelectorConfig(domain="sensor", device_class="power")
                     ),
+                    vol.Required(
+                        CONF_HAS_DOBBE,
+                        default=current.get(CONF_HAS_DOBBE, False),
+                    ): bool,
                     vol.Required(
                         CONF_DAY_START,
                         default=current.get(CONF_DAY_START, DEFAULT_DAY_START),

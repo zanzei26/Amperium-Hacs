@@ -39,6 +39,13 @@
         "data": {
           "otp": "One-time code"
         }
+      },
+      "dobbe": {
+        "title": "Dobbe module",
+        "description": "Do you have a Dobbe module (the HAN sensor that sends your meter readings to Amperium)? Then the integration can read live power directly from Amperium. It is experimental, and you can change this later under Configure.",
+        "data": {
+          "has_dobbe": "I have a Dobbe module"
+        }
       }
     },
     "error": {
@@ -202,6 +209,9 @@
       },
       "login_valid_until": {
         "name": "Login valid until"
+      },
+      "amperium_live_power": {
+        "name": "Power now (Amperium live)"
       }
     },
     "binary_sensor": {
@@ -219,10 +229,12 @@
           "day_start": "Day starts (hour, 0-23)",
           "day_end": "Day ends (hour, 1-24)",
           "scheme": "Scheme",
-          "power_entity": "Power sensor (optional)"
+          "power_entity": "Power sensor (optional)",
+          "has_dobbe": "I have a Dobbe module"
         },
         "data_description": {
-          "power_entity": "Optional. Pick a sensor with the whole house's power, e.g. Tibber Pulse/Watty. Used for live power and a forecast of this hour's average. A charger such as Easee only shows the charger's power and does not fit."
+          "power_entity": "Optional. Pick a sensor with the whole house's power, e.g. Tibber Pulse/Watty. Used for live power and a forecast of this hour's average. A charger such as Easee only shows the charger's power and does not fit.",
+          "has_dobbe": "Pick this if you have a Dobbe module (the HAN sensor that sends your meter readings to Amperium). The integration then connects to Amperium's live feed, the one the app uses, and you get \"Power now (Amperium live)\". The first time, the aio-pika library is installed. \"Power now\" uses it when you have no power sensor of your own, or yours is unavailable. It has not been confirmed that the module delivers live readings; see the attributes of \"Power now (Amperium live)\"."
         }
       }
     },

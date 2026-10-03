@@ -35,17 +35,21 @@ def complete_hours(buckets: list[dict[str, Any]], now: dt.datetime) -> list[dict
 
 
 def choose_power_now(
-    local_kw: float | None, amperium_kw: float | None
+    local_kw: float | None,
+    amperium_kw: float | None,
+    live_kw: float | None = None,
 ) -> tuple[float | None, str | None]:
     """Pick the "power now" value and say where it came from.
 
-    A reading from the user's own Home Assistant power sensor wins, because
-    Amperium only reports power once an hour. Amperium's value is the fallback
-    (no local sensor chosen, or it is unavailable). Returns (kW, source) with
-    source "local_sensor", "amperium" or None.
+    Order: the user's own Home Assistant power sensor, then Amperium's live feed,
+    then Amperium's hourly value (``currentActivePowerImport``). A reading of 0.0
+    counts as a reading. Returns (kW, source) with source "local_sensor",
+    "amperium_live", "amperium" or None.
     """
     if local_kw is not None:
         return local_kw, "local_sensor"
+    if live_kw is not None:
+        return live_kw, "amperium_live"
     if amperium_kw is not None:
         return amperium_kw, "amperium"
     return None, None

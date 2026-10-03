@@ -88,6 +88,14 @@ I tillegg får du to ekstra sensorer:
 
 Velg en sensor som måler **hele huset**. En lader som Easee viser bare laderens effekt og passer ikke til kapasitetsleddet. Prognosen starter på nytt hvis Home Assistant startes midt i en time. Da regnes den ut fra målingene som finnes, og `coverage` viser det.
 
+### Live effekt fra Amperium (Dobbe-modul, eksperimentell)
+
+Amperium-appen viser live effekt fra en egen sanntidsstrøm (RabbitMQ/AMQP). Feltet «Effekt nå» fra vanlig henting oppdateres bare én gang i timen og kan stå på 0. Har du en **Dobbe-modul** (HAN-sensoren som sender målingene dine til Amperium), velger du det ved oppsett eller senere under **Konfigurer** («Jeg har en Dobbe-modul»). Svaret er **nei** som standard, også for eksisterende installasjoner. Svarer du ja, kobler integrasjonen seg til den samme strømmen som appen bruker, og du får sensoren **Effekt nå (Amperium live)**. Første gang installeres biblioteket `aio-pika`. Mislykkes det, er bare denne funksjonen av. Svarer du nei, skjer ingenting av dette.
+
+«Effekt nå» bruker denne rekkefølgen: **din egen effektsensor** (se over), så **Amperium live** (siste måling må være under to minutter gammel), så Amperiums timeverdi. Attributtet `source` viser hva som er brukt (`local_sensor`, `amperium_live` eller `amperium`).
+
+**Dette er ikke bekreftet mot ekte målinger.** Meldingsformatet er lest fra appens kode, og en test viste at det vanlige HTTP-kallet gir en tom liste. Se attributtene på «Effekt nå (Amperium live)»: `status` (`connecting`, `connected`, `error`, `unavailable`), `messages` (antall mottatt), `age_seconds` og `last_error`. Står den på `connected` mens `messages` forblir 0, leverer måleren ikke live-målinger til Amperium akkurat nå. Et svakt mobilsignal på HAN-modulen (se «HAN-signalkvalitet») kan være årsaken, men det er ikke bekreftet. Meld fra under Issues hva du ser.
+
 ### Kostnad: brutto, støtte og netto
 
 Amperiums månedstall er lettere å misforstå enn de ser ut til. Dette er hva tallene faktisk inneholder, utledet fra en ekte konto (oktober). **Det er ikke bekreftet av Amperium.**
@@ -163,7 +171,9 @@ Eller manuelt: kopier `custom_components/amperium/` til `config/custom_component
 1. **Innstillinger → Enheter og tjenester → Legg til integrasjon → Amperium**.
 2. Skriv inn **telefonnummeret** du bruker hos kraftlaget (samme som i Kraftlaget-appen).
 3. Du får en **engangskode på SMS** – skriv den inn.
-4. Har du flere anlegg, velger du hvilket du vil følge. Ferdig.
+4. Har du flere anlegg, velger du hvilket du vil følge.
+5. Velg ordning: **Norgespris** eller **straumstøtte**.
+6. Velg om du har en **Dobbe-modul** (HAN-sensoren som sender målingene til Amperium). Svar nei hvis du er usikker. Du kan endre valget senere under **Konfigurer**. Ferdig.
 
 Integrasjonen logger inn passordløst med engangskode én gang, lagrer et refresh-token og fornyer tilgangen automatisk i bakgrunnen. Du trenger normalt aldri logge inn på nytt.
 

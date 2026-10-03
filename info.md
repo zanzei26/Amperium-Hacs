@@ -15,6 +15,7 @@ Strømforbruk, kostnad og pris **direkte fra Finnås Kraftlag** via Amperium-pla
 - Straumstøtte og Norgespris-sammenligning
 - Nettleie med kapasitetsledd, fastledd og total brutto/netto for din ordning (Norgespris eller straumstøtte)
 - Valgfri live effekt fra en sensor du har fra før (f.eks. Tibber Pulse)
+- Valgfri, eksperimentell live effekt direkte fra Amperium for deg med Dobbe-modul (samme sanntidsstrøm som appen). Du velger ved oppsett om du har modulen
 - Timeforbruk importert som statistikk til Energidashbordet (velg «Amperium forbruk»)
 - HAN-måler online (binær)
 - Når innloggingen utløper (diagnostikk), med varsel i god tid

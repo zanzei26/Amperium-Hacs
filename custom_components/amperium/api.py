@@ -5,6 +5,7 @@ import asyncio
 import datetime
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass, field
 from typing import Any
 
 import aiohttp
@@ -25,6 +26,19 @@ class AmperiumAuthError(AmperiumError):
 
 class AmperiumRateLimitError(AmperiumError):
     """Too many OTP codes requested today (Amperium daily limit)."""
+
+
+@dataclass
+class LiveSubscription:
+    """A transient live subscription: connection details plus any history.
+
+    ``details`` holds credentials for the AMQP connection. It is kept out of
+    ``repr`` so it can never end up in a log line by accident.
+    """
+
+    details: dict[str, Any] = field(repr=False)
+    import_observations: list[tuple[datetime.datetime, float]] = field(default_factory=list)
+    export_observations: list[tuple[datetime.datetime, float]] = field(default_factory=list)
 
 
 class AmperiumClient:
@@ -251,6 +265,46 @@ class AmperiumClient:
             raise AmperiumError(f"GET /api/sites/{{id}}/prices failed (HTTP {status})")
         return [_normalise_price(b) for b in data if isinstance(b, dict)]
 
+    async def async_create_live_subscription(
+        self,
+        site_id: int,
+        *,
+        include_export: bool = False,
+        ttl_seconds: int = 300,
+        history_seconds: int = 180,
+    ) -> LiveSubscription:
+        """Create a transient live subscription (what the app does for live power).
+
+        POST /api/sites/{id}/stream/amqp returns the AMQP connection details and
+        any buffered observations since ``initializeFrom``. The values are in
+        watts (the app divides by 1000 to show kW).
+
+        A 401 is not refreshed here: the regular poll refreshes the token, and
+        the live feed simply tries again later.
+        """
+        now = datetime.datetime.now(datetime.timezone.utc)
+        body = {
+            "includeActivePowerPositive": True,
+            "includeActivePowerNegative": bool(include_export),
+            "initializeFrom": _iso_z(now - datetime.timedelta(seconds=history_seconds)),
+            "liveFeedTtlInSeconds": int(ttl_seconds),
+        }
+        status, data = await self._request(
+            "POST", f"/api/sites/{site_id}/stream/amqp", json=body, auth=True
+        )
+        if status == 401:
+            raise AmperiumAuthError("Access token not accepted for the live feed")
+        if status != 200 or not isinstance(data, dict):
+            raise AmperiumError(f"POST /api/sites/{{id}}/stream/amqp failed (HTTP {status})")
+        details = data.get("liveConnectionDetails")
+        if not isinstance(details, dict) or not details.get("server") or not details.get("queueName"):
+            raise AmperiumError("Live feed answer had no connection details")
+        return LiveSubscription(
+            details=details,
+            import_observations=_observations(data.get("activePowerPositive")),
+            export_observations=_observations(data.get("activePowerNegative")),
+        )
+
     async def async_get_energy(
         self, site_id: int, start: datetime.datetime, end: datetime.datetime
     ) -> list[dict[str, Any]]:
@@ -372,6 +426,18 @@ class AmperiumClient:
             "energy_export_today": usage.get("energyExportToday"),
             "updated": usage.get("energyUpdatedOn"),
         }
+
+
+def _observations(items: Any) -> list[tuple[datetime.datetime, float]]:
+    """Parse [{timestamp, value}] into (datetime, value) pairs, oldest first."""
+    out: list[tuple[datetime.datetime, float]] = []
+    for item in items or []:
+        if not isinstance(item, dict):
+            continue
+        when, value = _parse_dt(item.get("timestamp")), _opt(item.get("value"))
+        if when is not None and value is not None:
+            out.append((when, value))
+    return sorted(out, key=lambda pair: pair[0])
 
 
 def _iso_z(value: datetime.datetime) -> str:

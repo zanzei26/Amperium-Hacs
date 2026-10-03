@@ -7,7 +7,7 @@ import datetime as dt
 import pytest
 from zoneinfo import ZoneInfo
 
-from conftest import api, derived, hourpower
+from conftest import amqp_feed, api, derived, hourpower
 
 UTC = dt.timezone.utc
 COMP = 154.12478544  # October figures from a live account (3 days)
@@ -214,9 +214,11 @@ class _ScriptedClient(api.AmperiumClient):
         self._script = {k: list(v) for k, v in script.items()}
         self.calls = []
         self.paths = []  # full paths, with the query string
+        self.bodies = []  # JSON bodies sent
 
     async def _request(self, method, path, **kwargs):
         self.paths.append(path)
+        self.bodies.append(kwargs.get("json"))
         self.calls.append((method, path.split("?")[0]))
         key = path.split("?")[0]
         return self._script[key].pop(0)
@@ -510,3 +512,403 @@ def test_total_gross_unknown_when_a_part_is_missing():
 
 def test_last_month_still_uses_charges_figures():
     assert derived.gross_grid_rent(-139.97, 100.0) == pytest.approx(-39.97)
+
+
+# --- "power now" with the Amperium live feed in between --------------------------------
+def test_power_now_order_local_then_live_then_hourly():
+    assert derived.choose_power_now(2.5, 0.0, 1.9) == (2.5, "local_sensor")
+    assert derived.choose_power_now(None, 0.0, 1.9) == (1.9, "amperium_live")
+    assert derived.choose_power_now(None, 0.4, None) == (0.4, "amperium")
+    assert derived.choose_power_now(None, None, None) == (None, None)
+
+
+def test_power_now_live_zero_is_a_real_reading():
+    assert derived.choose_power_now(None, 1.2, 0.0) == (0.0, "amperium_live")
+
+
+# --- live feed: routing keys and messages (as read from the app's code) -----------------
+@pytest.mark.parametrize("key,expected", [
+    ("AMPMETER-ABC123.O.101", ("AMPMETER-ABC123", 101)),
+    ("MID.O.102", ("MID", 102)),
+    ("MID.O.101.extra", ("MID", 101)),
+    ("MID.P", None),           # pulse
+    ("MID.C.5", None),         # command
+    ("MID.O.x", None),         # id is not a number
+    ("MID", None),
+    ("", None),
+    (None, None),
+    (101, None),
+])
+def test_routing_key(key, expected):
+    assert amqp_feed.parse_routing_key(key) == expected
+
+
+def test_observation_json_variants():
+    when = dt.datetime(2026, 10, 3, 19, 0, 5, tzinfo=UTC)
+    assert amqp_feed.parse_observation(b'{"Timestamp":"2026-10-03T19:00:05Z","Value":1351.0}') == (when, 1351.0)
+    assert amqp_feed.parse_observation(b'{"timestamp":"2026-10-03T19:00:05Z","value":1351}') == (when, 1351.0)
+    assert amqp_feed.parse_observation(b'{"t":"2026-10-03T19:00:05Z","v":"1351.5"}') == (when, 1351.5)
+    assert amqp_feed.parse_observation(b'[{"v":1},{"v":2}]')[1] == 2.0  # last item of a list
+    assert amqp_feed.parse_observation('{"Value": 0}'.encode())[1] == 0.0  # zero is a value
+
+
+@pytest.mark.parametrize("body", [b"", b"not json", b"{}", b"[]", b'{"Value": null}',
+                                  b'{"Value": "abc"}', b'{"Value": true}', b"\xff\xfe", b"42"])
+def test_observation_garbage_gives_no_value(body):
+    assert amqp_feed.parse_observation(body)[1] is None
+
+
+# --- live feed: state ---------------------------------------------------------------------
+def test_state_reading_goes_stale():
+    state = amqp_feed.LiveFeedState()
+    t0 = dt.datetime(2026, 10, 3, 19, 0, tzinfo=UTC)
+    assert state.current_kw(t0) is None
+    state.set_import(1.35, None, t0)
+    assert state.current_kw(t0 + dt.timedelta(seconds=119)) == 1.35
+    assert state.current_kw(t0 + dt.timedelta(seconds=121)) is None  # older than 120 s
+    assert state.age_seconds(t0 + dt.timedelta(seconds=10)) == 10
+
+
+def test_state_zero_is_kept_not_treated_as_missing():
+    state = amqp_feed.LiveFeedState()
+    t0 = dt.datetime(2026, 10, 3, 19, 0, tzinfo=UTC)
+    state.set_import(0.0, None, t0)
+    assert state.current_kw(t0) == 0.0
+
+
+def test_state_listeners_hear_changes_and_can_leave():
+    state, heard = amqp_feed.LiveFeedState(), []
+    remove = state.add_listener(lambda: heard.append(state.status))
+    state.set_status("connecting")
+    state.set_status("connecting")      # no change -> no call
+    state.set_status("connected")
+    remove()
+    state.set_status("error")
+    assert heard == ["connecting", "connected"]
+
+
+# --- live feed: the loop, with a fake client and a fake queue -----------------------------
+class _FakeClient:
+    """Hands out scripted subscriptions (or errors) like async_create_live_subscription."""
+
+    def __init__(self, script):
+        self.script = list(script)
+        self.calls = 0
+
+    async def async_create_live_subscription(self, site_id, **kwargs):
+        self.calls += 1
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return item
+
+
+def _sub(history=None):
+    return api.LiveSubscription(
+        details={"server": "mq.example.test", "port": 5671, "useSsl": True, "virtualHost": "vh",
+                 "username": "user-secret", "password": "pw-secret", "queueName": "queue-secret",
+                 "exchangeName": "exchange-secret"},
+        import_observations=history or [],
+    )
+
+
+def _run_feed(client, consume, *, library=True, stop_after_sleeps=1):
+    """Run the feed until it has slept ``stop_after_sleeps`` times; return (feed, sleeps)."""
+    sleeps = []
+
+    async def sleep(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) >= stop_after_sleeps:
+            raise asyncio.CancelledError
+
+    async def ensure():
+        return library
+
+    feed = amqp_feed.AmperiumLiveFeed(client, 215, consume=consume, ensure_library=ensure, sleep=sleep)
+
+    async def go():
+        try:
+            await feed.run()
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(go())
+    return feed, sleeps
+
+
+def test_feed_stores_power_in_kw_from_messages():
+    async def consume(details, on_message):
+        on_message("AMPMETER-X.O.101", b'{"Timestamp":"2026-10-03T19:00:05Z","Value":1351}')
+        on_message("AMPMETER-X.O.102", b'{"Value":999}')       # export: ignored
+        on_message("AMPMETER-X.O.101", b'{"Value":1349.5}')
+
+    feed, _ = _run_feed(_FakeClient([_sub()]), consume)
+    assert feed.state.import_kw == pytest.approx(1.3495)
+    assert feed.state.messages == 2
+
+
+def test_feed_uses_newest_buffered_reading_from_the_subscription():
+    old = (dt.datetime.now(UTC) - dt.timedelta(seconds=30), 1000.0)
+    new = (dt.datetime.now(UTC) - dt.timedelta(seconds=5), 2500.0)
+
+    async def consume(details, on_message):
+        return None
+
+    feed, _ = _run_feed(_FakeClient([_sub([old, new])]), consume)
+    assert feed.state.import_kw == pytest.approx(2.5)
+
+
+def test_feed_without_the_library_stays_off_and_never_subscribes():
+    client = _FakeClient([])
+    feed, sleeps = _run_feed(client, lambda *a: None, library=False)
+    assert feed.state.status == "unavailable"
+    assert client.calls == 0 and sleeps == []
+
+
+def test_feed_backs_off_after_errors_and_gives_the_error_without_secrets(caplog):
+    client = _FakeClient([api.AmperiumError("HTTP 503"), api.AmperiumError("HTTP 503")])
+
+    async def consume(details, on_message):
+        raise AssertionError("never reached")
+
+    state, seen = amqp_feed.LiveFeedState(), []
+    state.add_listener(lambda: seen.append(state.status))
+    sleeps = []
+
+    async def sleep(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) >= 2:
+            raise asyncio.CancelledError
+
+    async def ensure():
+        return True
+
+    feed = amqp_feed.AmperiumLiveFeed(client, 215, state=state, consume=consume,
+                                      ensure_library=ensure, sleep=sleep)
+
+    async def go():
+        try:
+            await feed.run()
+        except asyncio.CancelledError:
+            pass
+
+    with caplog.at_level("WARNING"):
+        asyncio.run(go())
+    assert sleeps == [5, 15]
+    assert seen[:3] == ["starting", "connecting", "error"]  # went to "error" while failing
+    assert seen[-1] == "off"                                 # and "off" once stopped
+    assert "HTTP 503" in state.last_error
+
+
+def test_feed_errors_from_the_connection_never_show_credentials(caplog):
+    client = _FakeClient([_sub()])
+
+    async def consume(details, on_message):
+        raise ConnectionError(
+            "failed amqps://user-secret:pw-secret@mq.example.test:5671/vh queue-secret exchange-secret"
+        )
+
+    with caplog.at_level("DEBUG"):
+        feed, _ = _run_feed(client, consume)
+    shown = feed.state.last_error + caplog.text
+    for secret in ("user-secret", "pw-secret", "mq.example.test", "queue-secret", "exchange-secret"):
+        assert secret not in shown
+    assert "ConnectionError" in feed.state.last_error
+
+
+def test_subscription_repr_hides_the_connection_details():
+    assert "pw-secret" not in repr(_sub()) and "user-secret" not in repr(_sub())
+
+
+def test_feed_subscribes_again_when_the_connection_ends():
+    client = _FakeClient([_sub(), _sub()])
+    calls = []
+
+    async def consume(details, on_message):
+        calls.append(1)
+
+    feed, sleeps = _run_feed(client, consume, stop_after_sleeps=2)
+    assert client.calls == 2 and len(calls) == 2
+    assert sleeps == [5, 15]  # no message arrived, so it counts as a failed session
+
+
+def test_feed_resubscribes_when_nothing_arrives_for_too_long(monkeypatch):
+    monkeypatch.setattr(amqp_feed, "TICK_SECONDS", 0.01)
+    monkeypatch.setattr(amqp_feed, "IDLE_RESUBSCRIBE_SECONDS", 0.03)
+    client = _FakeClient([_sub()])
+    cancelled = []
+
+    async def consume(details, on_message):
+        try:
+            await asyncio.sleep(30)  # a quiet queue
+        except asyncio.CancelledError:
+            cancelled.append(True)
+            raise
+
+    feed, sleeps = _run_feed(client, consume)
+    assert cancelled == [True]  # the idle listener was dropped
+    assert sleeps == [5]
+    assert feed.state.messages == 0
+
+
+# --- live subscription call (POST /api/sites/{id}/stream/amqp) -------------------------------
+STREAM = "/api/sites/215/stream/amqp"
+DETAILS = {"server": "mq.example.test", "port": 5671, "useSsl": True, "virtualHost": "vh",
+           "username": "u", "password": "p", "queueName": "q", "exchangeName": "x"}
+
+
+def test_live_subscription_sends_what_the_app_sends_and_parses_the_answer():
+    client = _ScriptedClient({STREAM: [(200, {
+        "activePowerPositive": [{"timestamp": "2026-10-03T19:00:10Z", "value": 1400.0},
+                                {"timestamp": "2026-10-03T19:00:00Z", "value": 1300.0}],
+        "activePowerNegative": [],
+        "liveConnectionDetails": DETAILS,
+    })]}, access_token="a", refresh_token="r")
+    sub = asyncio.run(client.async_create_live_subscription(215))
+    body = client.bodies[0]
+    assert body["includeActivePowerPositive"] is True
+    assert body["includeActivePowerNegative"] is False
+    assert body["liveFeedTtlInSeconds"] == 300
+    initial = dt.datetime.fromisoformat(body["initializeFrom"].replace("Z", "+00:00"))
+    assert 170 <= (dt.datetime.now(UTC) - initial).total_seconds() <= 190  # 180 s back
+    assert sub.details == DETAILS
+    assert [v for _, v in sub.import_observations] == [1300.0, 1400.0]  # oldest first
+    assert sub.export_observations == []
+
+
+def test_live_subscription_with_empty_history_is_fine():
+    client = _ScriptedClient({STREAM: [(200, {"activePowerPositive": [], "activePowerNegative": [],
+                                              "liveConnectionDetails": DETAILS})]})
+    assert asyncio.run(client.async_create_live_subscription(215)).import_observations == []
+
+
+def test_live_subscription_401_is_an_auth_error_and_never_refreshes():
+    client = _ScriptedClient({STREAM: [(401, None)]}, access_token="a", refresh_token="r")
+    with pytest.raises(api.AmperiumAuthError):
+        asyncio.run(client.async_create_live_subscription(215))
+    assert [c[1] for c in client.calls] == [STREAM]  # no refresh-token call
+
+
+@pytest.mark.parametrize("status,body", [(500, None), (404, {"title": "x"}), (200, None),
+                                          (200, {}), (200, {"liveConnectionDetails": {"server": "s"}})])
+def test_live_subscription_bad_answers_are_errors(status, body):
+    client = _ScriptedClient({STREAM: [(status, body)]})
+    with pytest.raises(api.AmperiumError) as err:
+        asyncio.run(client.async_create_live_subscription(215))
+    assert not isinstance(err.value, api.AmperiumAuthError)
+
+
+# --- the aio-pika glue, with a fake library (checks how we call it, not RabbitMQ itself) -----
+class _FakeCallbacks:
+    def __init__(self):
+        self.callbacks = []
+
+    def add(self, callback, weak=False):
+        self.callbacks.append(callback)
+
+    def fire(self):
+        for callback in self.callbacks:
+            callback(None, None)
+
+
+class _FakeMessage:
+    def __init__(self, routing_key, body):
+        self.routing_key, self.body = routing_key, body
+
+
+class _FakeQueue:
+    def __init__(self, channel):
+        self.channel = channel
+
+    async def consume(self, handler, no_ack=False, **kwargs):
+        self.channel.consumed = {"handler": handler, "no_ack": no_ack}
+
+
+class _FakeChannel:
+    def __init__(self):
+        self.close_callbacks = _FakeCallbacks()
+        self.qos = None
+        self.queue_asked = None
+        self.consumed = None
+
+    async def set_qos(self, prefetch_count=0, **kwargs):
+        self.qos = prefetch_count
+
+    async def get_queue(self, name, *, ensure=True):
+        self.queue_asked = (name, ensure)
+        return _FakeQueue(self)
+
+
+class _FakeConnection:
+    def __init__(self):
+        self.close_callbacks = _FakeCallbacks()
+        self.channel_obj = _FakeChannel()
+        self.closed = False
+
+    async def channel(self):
+        return self.channel_obj
+
+    async def close(self):
+        self.closed = True
+
+
+def test_aio_pika_glue_connects_like_the_app_and_passes_messages_on(monkeypatch):
+    import sys
+    import types
+
+    connection = _FakeConnection()
+    seen = {}
+
+    async def fake_connect(**kwargs):
+        seen.update(kwargs)
+        return connection
+
+    monkeypatch.setitem(sys.modules, "aio_pika", types.SimpleNamespace(connect=fake_connect))
+    got = []
+    ssl_context = object()
+
+    async def go():
+        task = asyncio.ensure_future(amqp_feed.consume_with_aio_pika(
+            dict(DETAILS), lambda key, body: got.append((key, body)), ssl_context=ssl_context))
+        for _ in range(5):          # let it connect and start consuming
+            await asyncio.sleep(0)
+        consumed = connection.channel_obj.consumed
+        await consumed["handler"](_FakeMessage("AMPMETER-X.O.101", b'{"Value": 5}'))
+        assert not task.done()      # keeps listening until the connection closes
+        connection.close_callbacks.fire()
+        await asyncio.wait_for(task, 1)
+
+    asyncio.run(go())
+    assert (seen["host"], seen["port"], seen["virtualhost"]) == ("mq.example.test", 5671, "vh")
+    assert (seen["login"], seen["password"], seen["ssl"]) == ("u", "p", True)
+    assert seen["ssl_context"] is ssl_context
+    assert connection.channel_obj.queue_asked == ("q", False)   # not declared, like the app
+    assert connection.channel_obj.consumed["no_ack"] is True
+    assert got == [("AMPMETER-X.O.101", b'{"Value": 5}')]
+    assert connection.closed is True
+
+
+def test_aio_pika_glue_without_tls_uses_the_plain_port_and_no_context(monkeypatch):
+    import sys
+    import types
+
+    connection, seen = _FakeConnection(), {}
+
+    async def fake_connect(**kwargs):
+        seen.update(kwargs)
+        return connection
+
+    monkeypatch.setitem(sys.modules, "aio_pika", types.SimpleNamespace(connect=fake_connect))
+    details = {"server": "s", "useSsl": False, "queueName": "q", "username": "u", "password": "p"}
+
+    async def go():
+        task = asyncio.ensure_future(amqp_feed.consume_with_aio_pika(details, lambda *a: None,
+                                                                      ssl_context=object()))
+        for _ in range(5):
+            await asyncio.sleep(0)
+        connection.channel_obj.close_callbacks.fire()   # the channel closing also ends it
+        await asyncio.wait_for(task, 1)
+
+    asyncio.run(go())
+    assert seen["port"] == 5672 and seen["ssl"] is False and seen["ssl_context"] is None
+    assert seen["virtualhost"] == "/"

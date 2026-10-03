@@ -39,6 +39,13 @@
         "data": {
           "otp": "Engangskode"
         }
+      },
+      "dobbe": {
+        "title": "Dobbe-modul",
+        "description": "Har du en Dobbe-modul (HAN-sensoren som sender målingene dine til Amperium)? Da kan integrasjonen hente live effekt direkte fra Amperium. Den er eksperimentell, og du kan endre valget senere under Konfigurer.",
+        "data": {
+          "has_dobbe": "Jeg har en Dobbe-modul"
+        }
       }
     },
     "error": {
@@ -202,6 +209,9 @@
       },
       "login_valid_until": {
         "name": "Innlogging gyldig til"
+      },
+      "amperium_live_power": {
+        "name": "Effekt nå (Amperium live)"
       }
     },
     "binary_sensor": {
@@ -219,10 +229,12 @@
           "day_start": "Dag starter (time, 0-23)",
           "day_end": "Dag slutter (time, 1-24)",
           "scheme": "Ordning",
-          "power_entity": "Effektsensor (valgfri)"
+          "power_entity": "Effektsensor (valgfri)",
+          "has_dobbe": "Jeg har en Dobbe-modul"
         },
         "data_description": {
-          "power_entity": "Valgfri. Velg en sensor med hele husets effekt, for eksempel Tibber Pulse/Watty. Brukes til live effekt og prognose for timesnittet. En lader som Easee viser bare laderens effekt og passer ikke."
+          "power_entity": "Valgfri. Velg en sensor med hele husets effekt, for eksempel Tibber Pulse/Watty. Brukes til live effekt og prognose for timesnittet. En lader som Easee viser bare laderens effekt og passer ikke.",
+          "has_dobbe": "Velg dette hvis du har en Dobbe-modul (HAN-sensoren som sender målingene dine til Amperium). Da kobler integrasjonen seg til Amperiums live-strøm, den samme som appen bruker, og du får «Effekt nå (Amperium live)». Første gang installeres biblioteket aio-pika. «Effekt nå» bruker den når du ikke har en egen effektsensor, eller din er utilgjengelig. Det er ikke bekreftet at modulen leverer live-målinger; se attributtene til «Effekt nå (Amperium live)»."
         }
       }
     },

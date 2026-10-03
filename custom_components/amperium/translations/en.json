@@ -42,7 +42,10 @@
       "cost_total": { "name": "Cost this month" },
       "cost_energy": { "name": "Energy cost this month" },
       "cost_grid_rent": { "name": "Grid rent this month" },
-      "spot_price": { "name": "Spot price now" }
+      "spot_price": { "name": "Spot price now" },
+      "price_min_today": { "name": "Spot price lowest today" },
+      "price_max_today": { "name": "Spot price highest today" },
+      "price_avg_today": { "name": "Spot price average today" }
     },
     "binary_sensor": {
       "han_online": { "name": "HAN meter online" }

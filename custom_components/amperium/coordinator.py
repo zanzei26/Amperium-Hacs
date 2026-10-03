@@ -10,8 +10,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryAuthFailed
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
+from homeassistant.util import dt as dt_util
 
-from .api import AmperiumAuthError, AmperiumClient, AmperiumError
+from .api import AmperiumAuthError, AmperiumClient, AmperiumError, summarise_prices
 from .const import (
     CONF_ACCESS_TOKEN,
     CONF_REFRESH_TOKEN,
@@ -54,6 +55,8 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except AmperiumError as err:
             raise UpdateFailed(str(err)) from err
 
+        data.update(await self._async_fetch_prices())
+
         # If the access/refresh token changed (lazy refresh), persist it so
         # a restart keeps working.
         if (
@@ -68,3 +71,39 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             self.hass.config_entries.async_update_entry(self.entry, data=new_data)
 
         return data
+
+    async def _async_fetch_prices(self) -> dict[str, Any]:
+        """Fetch hourly prices for today and tomorrow (local days).
+
+        Prices are an extra: a failure here must not make the main sensors
+        unavailable, so errors are logged and the price data is left out.
+        """
+        today_start = dt_util.start_of_local_day()
+        tomorrow_start = today_start + timedelta(days=1)
+        day_after_start = tomorrow_start + timedelta(days=1)
+
+        try:
+            today = await self.client.async_get_prices(
+                self._site_id, today_start, tomorrow_start
+            )
+        except AmperiumAuthError as err:
+            raise ConfigEntryAuthFailed(str(err)) from err
+        except AmperiumError as err:
+            _LOGGER.debug("Could not fetch today's prices: %s", err)
+            return {}
+
+        result: dict[str, Any] = {
+            "prices_today": today,
+            **summarise_prices(today),
+        }
+
+        # Tomorrow's prices are published around midday, so this may be empty.
+        try:
+            tomorrow = await self.client.async_get_prices(
+                self._site_id, tomorrow_start, day_after_start
+            )
+        except AmperiumError as err:
+            _LOGGER.debug("Could not fetch tomorrow's prices: %s", err)
+            tomorrow = []
+        result["prices_tomorrow"] = [b for b in tomorrow if b.get("spot") is not None]
+        return result

@@ -7,6 +7,8 @@ Strømforbruk, kostnad og pris **direkte fra kraftlaget ditt** via Amperium-plat
 - Effekt nå (kW)
 - Total kostnad, energikostnad og nettleie hittil i måneden (kr)
 - Offisiell spotpris nå (kr/kWh)
+- Laveste, høyeste og gjennomsnittlig timepris i dag (kr/kWh)
+- Timepriser for i dag og i morgen som attributter på spotpris-sensoren
 - HAN-måler online (binær)
 
 ## Oppsett

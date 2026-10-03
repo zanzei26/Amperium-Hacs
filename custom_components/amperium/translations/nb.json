@@ -42,7 +42,10 @@
       "cost_total": { "name": "Kostnad denne måneden" },
       "cost_energy": { "name": "Energikostnad denne måneden" },
       "cost_grid_rent": { "name": "Nettleie denne måneden" },
-      "spot_price": { "name": "Spotpris nå" }
+      "spot_price": { "name": "Spotpris nå" },
+      "price_min_today": { "name": "Laveste spotpris i dag" },
+      "price_max_today": { "name": "Høyeste spotpris i dag" },
+      "price_avg_today": { "name": "Spotpris snitt i dag" }
     },
     "binary_sensor": {
       "han_online": { "name": "HAN-måler online" }

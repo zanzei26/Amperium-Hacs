@@ -141,6 +141,13 @@ class AmperiumClient:
     # ------------------------------------------------------------------ #
     # Data
     # ------------------------------------------------------------------ #
+    async def _auth_get(self, path: str) -> tuple[int, Any]:
+        """Authenticated GET, refreshing the token once on 401."""
+        status, data = await self._request("GET", path, auth=True)
+        if status == 401 and await self.refresh():
+            status, data = await self._request("GET", path, auth=True)
+        return status, data
+
     async def _get_sites_raw(self) -> tuple[int, Any]:
         """GET /api/sites for the current month, refreshing the token on 401."""
         now = datetime.datetime.now(datetime.timezone.utc)
@@ -152,11 +159,7 @@ class AmperiumClient:
                 now.strftime("%Y-%m-%dT%H:%M:%SZ"),
             )
         )
-        status, data = await self._request("GET", path, auth=True)
-        if status == 401:
-            if await self.refresh():
-                status, data = await self._request("GET", path, auth=True)
-        return status, data
+        return await self._auth_get(path)
 
     async def async_get_sites(self) -> list[dict[str, Any]]:
         """Return the list of sites for this account."""
@@ -166,6 +169,24 @@ class AmperiumClient:
         if status != 200 or not isinstance(data, list):
             raise AmperiumError(f"GET /api/sites failed (HTTP {status})")
         return data
+
+    async def async_get_prices(
+        self, site_id: int, start: datetime.datetime, end: datetime.datetime
+    ) -> list[dict[str, Any]]:
+        """Return hourly prices for [start, end) as normalised buckets.
+
+        GET /api/sites/{id}/prices returns one bucket per hour. Verified
+        against the live API: an array of objects with startTime, endTime,
+        spotPreliminary, spotOfficial (null until fixed), surcharge,
+        salesTaxPercentage and updatedOn.
+        """
+        path = f"/api/sites/{site_id}/prices?from={_iso_z(start)}&to={_iso_z(end)}"
+        status, data = await self._auth_get(path)
+        if status == 401:
+            raise AmperiumAuthError("Access/refresh token no longer valid")
+        if status != 200 or not isinstance(data, list):
+            raise AmperiumError(f"GET /api/sites/{{id}}/prices failed (HTTP {status})")
+        return [_normalise_price(b) for b in data if isinstance(b, dict)]
 
     async def async_fetch(self, site_id: int) -> dict[str, Any]:
         """Fetch and normalise the current-month data for one site."""
@@ -195,3 +216,42 @@ class AmperiumClient:
             "han_online": site.get("hanPortMeterOnline"),
             "updated": usage.get("energyUpdatedOn"),
         }
+
+
+def _iso_z(value: datetime.datetime) -> str:
+    """Format an aware datetime as ISO-8601 UTC with a trailing Z."""
+    return value.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _normalise_price(bucket: dict[str, Any]) -> dict[str, Any]:
+    """Reduce one hourly price bucket to the fields we expose.
+
+    The official spot price is preferred; the preliminary price is used until
+    the official one has been fixed.
+    """
+    official = bucket.get("spotOfficial")
+    spot = official if official is not None else bucket.get("spotPreliminary")
+    return {
+        "start": bucket.get("startTime"),
+        "end": bucket.get("endTime"),
+        "spot": spot,
+        "official": official is not None,
+        "surcharge": bucket.get("surcharge"),
+        "vat_percent": bucket.get("salesTaxPercentage"),
+    }
+
+
+def summarise_prices(buckets: list[dict[str, Any]]) -> dict[str, Any]:
+    """Return min/max/average spot price for a list of normalised buckets."""
+    priced = [b for b in buckets if isinstance(b.get("spot"), (int, float))]
+    if not priced:
+        return {}
+    low = min(priced, key=lambda b: b["spot"])
+    high = max(priced, key=lambda b: b["spot"])
+    return {
+        "price_min_today": low["spot"],
+        "price_min_hour": low["start"],
+        "price_max_today": high["spot"],
+        "price_max_hour": high["start"],
+        "price_avg_today": sum(b["spot"] for b in priced) / len(priced),
+    }

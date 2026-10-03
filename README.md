@@ -19,9 +19,16 @@ Sensorer per anlegg:
 | `sensor.*_energikostnad_denne_maneden` | Energidelen av kostnaden (kr) |
 | `sensor.*_nettleie_denne_maneden` | Nettleie hittil i måneden (kr) |
 | `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh) |
+| `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen som attributt |
+| `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen som attributt |
+| `sensor.*_spotpris_snitt_i_dag` | Gjennomsnittlig timepris i dag (kr/kWh) |
 | `binary_sensor.*_han_maler_online` | Om HAN-måleren er online |
 
 Sensorene nullstilles daglig/månedlig, så de passer best som egne dashbordkort (se [`examples/lovelace-amperium.yaml`](examples/lovelace-amperium.yaml)). Energidashbordet i Home Assistant vil helst ha en kumulativ livstidsmåler, så forbruket til Energidashbordet bør fortsatt hentes fra HAN-måleren/Tibber, ikke fra disse månedssensorene.
+
+### Timepriser
+
+Sensoren **Spotpris nå** har attributtene `prices_today` og `prices_tomorrow`: lister med én rad per time (`start`, `end`, `spot`, `surcharge`, `vat_percent`, `official`). Prisene for i morgen kommer rundt midten av dagen. `spot` er offisiell spotpris når den er fastsatt, ellers foreløpig pris. Listene kan brukes i for eksempel ApexCharts eller automasjoner.
 
 ## Installasjon (HACS)
 
@@ -49,6 +56,7 @@ Amperium bruker passordløs OTP-innlogging i tillegg til en statisk app-nøkkel 
 2. Logger inn: `POST /api/accounts/login/otp` → access- og refresh-token
 3. Fornyer ved behov: `POST /api/accounts/login/refresh-token` (kun når access-token er utløpt)
 4. Henter data: `GET /api/sites?charges_from=…&charges_to=…`
+5. Henter timepriser: `GET /api/sites/{id}/prices?from=…&to=…` (i dag og i morgen)
 
 Polling hvert 15. minutt (HAN-måleren oppdateres time for time).
 

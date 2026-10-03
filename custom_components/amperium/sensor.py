@@ -93,6 +93,33 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         suggested_display_precision=3,
         value_fn=lambda d: _round(d.get("spot_price"), 4),
     ),
+    AmperiumSensorDescription(
+        key="price_min_today",
+        translation_key="price_min_today",
+        native_unit_of_measurement="kr/kWh",
+        icon="mdi:arrow-down-bold",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        value_fn=lambda d: _round(d.get("price_min_today"), 4),
+    ),
+    AmperiumSensorDescription(
+        key="price_max_today",
+        translation_key="price_max_today",
+        native_unit_of_measurement="kr/kWh",
+        icon="mdi:arrow-up-bold",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        value_fn=lambda d: _round(d.get("price_max_today"), 4),
+    ),
+    AmperiumSensorDescription(
+        key="price_avg_today",
+        translation_key="price_avg_today",
+        native_unit_of_measurement="kr/kWh",
+        icon="mdi:chart-line-variant",
+        state_class=SensorStateClass.MEASUREMENT,
+        suggested_display_precision=3,
+        value_fn=lambda d: _round(d.get("price_avg_today"), 4),
+    ),
 )
 
 
@@ -123,6 +150,8 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
 
     entity_description: AmperiumSensorDescription
     _attr_has_entity_name = True
+    # Hourly price lists are large and change daily; keep them out of the DB.
+    _unrecorded_attributes = frozenset({"prices_today", "prices_tomorrow"})
 
     def __init__(
         self,
@@ -153,6 +182,21 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         """Expose the last-updated timestamp from the meter."""
-        if self.entity_description.key == "energy_month" and self.coordinator.data:
-            return {"updated": self.coordinator.data.get("updated")}
+        data = self.coordinator.data
+        if not data:
+            return None
+        key = self.entity_description.key
+        if key == "energy_month":
+            return {"updated": data.get("updated")}
+        if key == "spot_price":
+            # Hourly buckets (start/end/spot/surcharge/vat_percent) for use in
+            # e.g. ApexCharts cards or automations.
+            return {
+                "prices_today": data.get("prices_today", []),
+                "prices_tomorrow": data.get("prices_tomorrow", []),
+            }
+        if key == "price_min_today":
+            return {"hour": data.get("price_min_hour")}
+        if key == "price_max_today":
+            return {"hour": data.get("price_max_hour")}
         return None

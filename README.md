@@ -19,7 +19,7 @@ Sensorer per anlegg:
 | `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh) |
 | `binary_sensor.*_han_maler_online` | Om HAN-måleren er online |
 
-Forbruk- og energikostnad-sensorene passer rett inn i **Energidashbordet** i Home Assistant.
+Sensorene nullstilles daglig/månedlig, så de passer best som egne dashbordkort (se [`examples/lovelace-amperium.yaml`](examples/lovelace-amperium.yaml)). Energidashbordet i Home Assistant vil helst ha en kumulativ livstidsmåler, så forbruket til Energidashbordet bør fortsatt hentes fra HAN-måleren/Tibber, ikke fra disse månedssensorene.
 
 ## Installasjon (HACS)
 

@@ -2,9 +2,15 @@
 
 [![Åpne i Home Assistant og legg til i HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=zanzei26&repository=Amperium-Hacs&category=integration)
 
-Henter strømforbruk, kostnad og pris **direkte fra kraftlaget ditt** via Amperium-plattformen (Finnås Kraftlag m.fl.) – de samme tallene som står på fakturaen og i Amperium-appen, rett inn i Home Assistant.
+Henter strømforbruk, kostnad og pris **direkte fra kraftlaget ditt** via Amperium-plattformen – de samme tallene som vises i appen **Kraftlaget** fra Finnås Kraftlag, rett inn i Home Assistant.
 
-> _Unofficial Home Assistant integration for the Amperium cloud platform used by several Norwegian power companies. Passwordless OTP login, HAN meter data as native sensors._
+> _Unofficial Home Assistant integration for the Amperium cloud platform (the **Kraftlaget** app from Finnås Kraftlag, Bømlo). Passwordless OTP login, HAN meter data as native sensors._
+
+## Hvem fungerer dette for?
+
+Bekreftet: kunder hos **Finnås Kraftlag** (Bømlo) som bruker appen **Kraftlaget** (`no.finnas_kraftlag.amperium`). Integrasjonen bruker samme API og samme innlogging som den appen.
+
+Ikke bekreftet: om andre kraftlag bruker samme plattform, og om integrasjonen virker for dem. Prøver du den hos et annet kraftlag, meld fra under [Issues](https://github.com/zanzei26/Amperium-Hacs/issues) hva som skjedde, så oppdaterer vi listen.
 
 ## Hva du får
 
@@ -42,7 +48,7 @@ Eller manuelt: kopier `custom_components/amperium/` til `config/custom_component
 ## Oppsett
 
 1. **Innstillinger → Enheter og tjenester → Legg til integrasjon → Amperium**.
-2. Skriv inn **telefonnummeret** du bruker hos kraftlaget (samme som i Amperium-appen).
+2. Skriv inn **telefonnummeret** du bruker hos kraftlaget (samme som i Kraftlaget-appen).
 3. Du får en **engangskode på SMS** – skriv den inn.
 4. Har du flere anlegg, velger du hvilket du vil følge. Ferdig.
 

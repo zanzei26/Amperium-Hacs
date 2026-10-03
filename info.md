@@ -1,6 +1,8 @@
 # Amperium
 
-Strømforbruk, kostnad og pris **direkte fra kraftlaget ditt** via Amperium-plattformen (Finnås Kraftlag m.fl.) – de samme tallene som på fakturaen og i Amperium-appen.
+Strømforbruk, kostnad og pris **direkte fra kraftlaget ditt** via Amperium-plattformen – de samme tallene som vises i appen **Kraftlaget** fra Finnås Kraftlag.
+
+**Bekreftet for:** Finnås Kraftlag (Bømlo). Andre kraftlag er ikke bekreftet – prøver du et annet, meld fra under Issues på GitHub.
 
 ## Sensorer
 - Forbruk denne måneden / i dag (kWh)

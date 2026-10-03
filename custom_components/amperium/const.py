@@ -3,7 +3,7 @@ from __future__ import annotations
 
 DOMAIN = "amperium"
 
-# Base URL for the Amperium cloud API (Finnås Kraftlag m.fl.).
+# Base URL for the Amperium cloud API (used by the Finnås Kraftlag app "Kraftlaget").
 BASE_URL = "https://api.amperium.cloud"
 
 # Static application key sent as the `api-key` header on every request.

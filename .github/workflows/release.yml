@@ -1,9 +1,12 @@
 name: Release
 
+# Creates a GitHub release named after the version in manifest.json.
+# Runs when a v* tag is pushed, or manually from the Actions tab.
 on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -14,15 +17,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify tag matches manifest version
+      - name: Read manifest version
+        id: manifest
         run: |
           version=$(python3 -c "import json; print(json.load(open('custom_components/amperium/manifest.json'))['version'])")
-          if [ "v${version}" != "${GITHUB_REF_NAME}" ]; then
-            echo "Tag ${GITHUB_REF_NAME} does not match manifest version v${version}"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Verify pushed tag matches manifest version
+        if: github.ref_type == 'tag'
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "${{ steps.manifest.outputs.tag }}" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match manifest version ${{ steps.manifest.outputs.tag }}"
             exit 1
           fi
 
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --generate-notes
+        run: |
+          if gh release view "${{ steps.manifest.outputs.tag }}" >/dev/null 2>&1; then
+            echo "Release ${{ steps.manifest.outputs.tag }} already exists"
+            exit 0
+          fi
+          gh release create "${{ steps.manifest.outputs.tag }}" \
+            --target "${GITHUB_SHA}" \
+            --title "${{ steps.manifest.outputs.tag }}" \
+            --generate-notes

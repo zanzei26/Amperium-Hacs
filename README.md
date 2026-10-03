@@ -31,10 +31,10 @@ Sensorer per anlegg:
 | «Kapasitetsgrunnlag denne måneden» (kW) | Effekten kapasitetsleddet beregnes av, med trinnet og trinntabellen som attributter |
 | «Kapasitetsleddet denne måneden» (kr) og «Til neste kapasitetstrinn» (kW) | Beløpet for trinnet du er i, og hvor mange kW det er til neste trinn. Samme for forrige måned |
 | `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh), uten mva og påslag |
-| «Spotpris inkl. mva nå (med påslag)» | Prisen du betaler per kWh nå: (spot + påslag) inkl. mva, med mva-satsen fra Amperium. Avledet, ikke bekreftet mot appen |
-| `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen som attributt |
-| `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen som attributt |
-| `sensor.*_spotpris_snitt_i_dag` | Gjennomsnittlig timepris i dag (kr/kWh) |
+| «Strømpris nå inkl. påslag og mva» | Prisen du betaler per kWh nå: (spot + påslag) × (1 + mva%), med mva-satsen fra Amperium. Tas fra inneværende time i prislisten. Avledet, ikke bekreftet mot appen |
+| `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen og prisen inkl. påslag og mva (`consumer`) som attributter |
+| `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen og `consumer` som attributter |
+| `sensor.*_spotpris_snitt_i_dag` | Gjennomsnittlig timepris i dag (kr/kWh), med snittet inkl. påslag og mva (`consumer`) som attributt |
 | `sensor.*_forbruk_i_gar` | Forbruk i går (kWh), summert fra timedata i lokal tid |
 | `sensor.*_forbruk_siste_time` | Forbruk siste hele time (kWh) |
 | `sensor.*_forbruk_forrige_maned` | Forbruk forrige måned (kWh) |
@@ -42,15 +42,12 @@ Sensorer per anlegg:
 | `sensor.*_energikostnad_brutto_i_gar` | Brutto energikostnad i går (kr): (spot + påslag) × kWh inkl. mva, før støtte |
 | `sensor.*_energikostnad_brutto_denne_maneden` | Brutto energikostnad hittil i måneden (kr), summert fra timedata |
 | `sensor.*_mva_pa_energi_denne_maneden` | Mva-delen av energikostnaden hittil i måneden (kr) |
-| «Straumstøtte denne måneden» | Straumstøtte summert fra timedata (kr) |
 | «Straumstøtte trukket fra nettleien denne måneden» | Straumstøtten slik den er trukket fra nettleien (kr) |
 | «Norgespris-kompensasjon denne måneden» | Norgespris-kompensasjon summert fra timedata (kr) |
 | «Kompensasjon denne måneden (din ordning)» | Beløpet for ordningen du har valgt (kr) |
 | «Netto kostnad denne måneden (din ordning)» | Total kostnad inkl. fastledd, for ordningen du har valgt (kr). Se «Kostnad: brutto, støtte og netto» |
 | «Netto kostnad med Norgespris» / «… med straumstøtte» | Netto for hver ordning, avslått som standard |
 | «Norgespris sparer denne måneden» | Hvor mye mer Norgespris gir enn straumstøtte hittil i måneden (kr) |
-| `sensor.*_norgespris_minus_straumstotte_forrige_maned` | Hvor mye mer Norgespris ga enn straumstøtte forrige hele måned (kr) |
-| «Norgespris minus straumstøtte denne måneden» | Det samme for inneværende måned. Amperium oppgir ofte 0 eller tomt tidlig i måneden |
 | `sensor.*_eksport_*` | Eksport (solceller), avslått som standard. Slå på hvis du produserer strøm |
 | `sensor.*_han_signal` | HAN-signalstyrke (diagnostikk) |
 | `sensor.*_han_signalkvalitet` | HAN-signal som tekst: Ingen signal, Dårlig, Middels, Bra, Veldig bra, Ingen data eller Ikke på nett (diagnostikk) |
@@ -100,7 +97,7 @@ Derfor regnes sensorene slik:
 - **Total brutto** = energi + nettleie før støtte + fastledd.
 - **Netto med straumstøtte** = Amperiums månedstotal (som allerede er etter støtte) + fastledd.
 - **Netto med Norgespris** = Amperiums månedstotal + fastledd + straumstøtten lagt tilbake − Norgespris-kompensasjonen. Straumstøtte gjelder ikke på Norgespris.
-- **Norgespris sparer** = Norgespris-kompensasjon − straumstøtte.
+- **Norgespris sparer** = Norgespris-kompensasjon − straumstøtten som er trukket fra nettleien (`gridRent`, det som faktisk er trukket på fakturaen). Det finnes bare ett støttetall: «Straumstøtte trukket fra nettleien denne måneden».
 
 Du velger ordningen (Norgespris eller straumstøtte) når du setter opp integrasjonen, og kan endre den under **Konfigurer**. «Netto kostnad denne måneden» bruker valgt ordning. Har du ikke valgt (eldre installasjon), er den utilgjengelig til du velger.
 
@@ -151,7 +148,6 @@ Amperium bruker passordløs OTP-innlogging i tillegg til en statisk app-nøkkel 
 5. Henter timepriser: `GET /api/sites/{id}/prices?from=…&to=…` (i dag og i morgen)
 6. Henter timeforbruk: `GET /api/sites/{id}/consumption/energy?from=…&to=…&resolution=H`
 7. Henter kostnad: `GET /api/sites/{id}/consumption/charges?from=…&to=…&resolution=H`
-8. Henter støttesammenligning: `GET /api/sites/{id}/consumption/norgespris-vs-subsidy?from=…&to=…`
 
 `resolution` må være én bokstav (`H`, `D` eller `M`). Ord og tall avvises av API-et. Timedata hentes høyst en gang i timen.
 
@@ -164,3 +160,11 @@ Dette er et uoffisielt, community-laget prosjekt uten tilknytning til Amperium e
 ## Lisens
 
 MIT – se [LICENSE](LICENSE).
+
+## Utvikling
+
+De rene beregningene (`derived.py`, `hourpower.py`, deler av `api.py`) har tester som ikke trenger Home Assistant:
+
+```
+cd tests && python -m pytest
+```

@@ -88,14 +88,8 @@
       "cost_yesterday": {
         "name": "Energikostnad brutto i går"
       },
-      "subsidy_month": {
-        "name": "Straumstøtte denne måneden (timesummert)"
-      },
       "norgespris_month": {
         "name": "Norgespris-kompensasjon denne måneden"
-      },
-      "norgespris_minus_subsidy": {
-        "name": "Norgespris minus straumstøtte forrige måned"
       },
       "han_signal": {
         "name": "HAN-signal"
@@ -185,10 +179,7 @@
         "name": "Kapasitetsledd forrige måned"
       },
       "spot_price_incl_vat": {
-        "name": "Spotpris inkl. mva nå (med påslag)"
-      },
-      "norgespris_minus_subsidy_month": {
-        "name": "Norgespris minus straumstøtte denne måneden"
+        "name": "Strømpris nå inkl. påslag og mva"
       }
     },
     "binary_sensor": {

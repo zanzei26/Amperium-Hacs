@@ -247,7 +247,6 @@ class AmperiumClient:
                     # surchargePrice are prices per kWh, not amounts.
                     "energy": _num(b.get("importedEnergyAmount")),
                     "tax": _num(b.get("salesTaxAmount")),
-                    "subsidy": _num(b.get("importedCompensationAmount")),
                     "norgespris": _num(b.get("importedCompensationAmountNorgespris")),
                 }
                 for b in data.get("energy") or []
@@ -265,26 +264,6 @@ class AmperiumClient:
                 for i in data.get("capacityChargeIntervals") or []
                 if isinstance(i, dict)
             ],
-        }
-
-    async def async_get_norgespris_vs_subsidy(
-        self, site_id: int, start: datetime.datetime, end: datetime.datetime
-    ) -> dict[str, Any]:
-        """Compare Norgespris with the electricity subsidy for a full month."""
-        path = (
-            f"/api/sites/{site_id}/consumption/norgespris-vs-subsidy"
-            f"?from={_iso_z(start)}&to={_iso_z(end)}"
-        )
-        status, data = await self._auth_get(path)
-        if status == 401:
-            raise AmperiumAuthError("Access/refresh token no longer valid")
-        if status != 200 or not isinstance(data, dict):
-            raise AmperiumError(f"GET norgespris-vs-subsidy failed (HTTP {status})")
-        return {
-            "imported_energy": _num(data.get("importedEnergy")),
-            "subsidy_amount": _num(data.get("importedCompensationAmount")),
-            "norgespris_amount": _num(data.get("importedCompensationAmountNorgespris")),
-            "norgespris_minus_subsidy": _num(data.get("norgesprisMinusSubsidy")),
         }
 
     async def _get_list(self, path: str, label: str) -> list[Any]:
@@ -421,10 +400,14 @@ def summarise_prices(buckets: list[dict[str, Any]]) -> dict[str, Any]:
         return {}
     low = min(priced, key=lambda b: b["spot"])
     high = max(priced, key=lambda b: b["spot"])
+    consumer = [b["consumer"] for b in priced if isinstance(b.get("consumer"), (int, float))]
     return {
         "price_min_today": low["spot"],
         "price_min_hour": low["start"],
+        "price_min_consumer": low.get("consumer"),
         "price_max_today": high["spot"],
         "price_max_hour": high["start"],
+        "price_max_consumer": high.get("consumer"),
         "price_avg_today": sum(b["spot"] for b in priced) / len(priced),
+        "price_avg_consumer": sum(consumer) / len(consumer) if consumer else None,
     }

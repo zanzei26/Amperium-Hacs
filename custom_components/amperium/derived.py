@@ -37,12 +37,14 @@ def complete_hours(buckets: list[dict[str, Any]], now: dt.datetime) -> list[dict
 def consumer_price(spot: Any, surcharge: Any, vat_percent: Any) -> float | None:
     """Price per kWh the consumer pays: (spot + surcharge) incl. VAT.
 
-    Same formula the old Home Assistant script used. The VAT percentage comes
-    from the API rather than being hardcoded. Derived, not confirmed by
-    Amperium; None if any part is missing.
+    The VAT percentage comes from the API (never hardcoded). A missing
+    surcharge counts as 0; a missing spot price or VAT percentage gives None.
+    Derived, not confirmed by Amperium.
     """
+    if spot is None or vat_percent is None:
+        return None
     try:
-        return (float(spot) + float(surcharge)) * (1 + float(vat_percent) / 100)
+        return (float(spot) + float(surcharge or 0)) * (1 + float(vat_percent) / 100)
     except (TypeError, ValueError):
         return None
 
@@ -144,7 +146,7 @@ def summarise_charges(
     yesterday = (now_local - dt.timedelta(days=1)).date()
 
     out: dict[str, Any] = {}
-    cost = gross = tax = subsidy = norgespris = 0.0
+    cost = gross = tax = norgespris = 0.0
     have_cost = have_month = False
     for bucket in hours:
         local = bucket["start"].astimezone(tz)
@@ -154,7 +156,6 @@ def summarise_charges(
         if (local.year, local.month) == (this_start.year, this_start.month):
             gross += bucket["energy"]
             tax += bucket["tax"]
-            subsidy += bucket["subsidy"]
             norgespris += bucket["norgespris"]
             have_month = True
     if have_cost:
@@ -162,7 +163,6 @@ def summarise_charges(
     if have_month:
         out["energy_gross_month"] = gross
         out["vat_month"] = tax
-        out["subsidy_month"] = subsidy
         out["norgespris_month"] = norgespris
     return out
 

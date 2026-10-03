@@ -176,14 +176,6 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: _round(d.get("cost_yesterday"), 2),
     ),
     AmperiumSensorDescription(
-        key="subsidy_month",
-        translation_key="subsidy_month",
-        native_unit_of_measurement="kr",
-        icon="mdi:cash-plus",
-        suggested_display_precision=2,
-        value_fn=lambda d: _round(d.get("subsidy_month"), 2),
-    ),
-    AmperiumSensorDescription(
         key="norgespris_month",
         translation_key="norgespris_month",
         native_unit_of_measurement="kr",
@@ -389,14 +381,6 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         ),
     ),
     AmperiumSensorDescription(
-        key="norgespris_minus_subsidy",
-        translation_key="norgespris_minus_subsidy",
-        native_unit_of_measurement="kr",
-        icon="mdi:scale-balance",
-        suggested_display_precision=2,
-        value_fn=lambda d: _round(d.get("norgespris_minus_subsidy"), 2),
-    ),
-    AmperiumSensorDescription(
         key="han_signal",
         translation_key="han_signal",
         icon="mdi:signal",
@@ -415,11 +399,15 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         key="spot_price_incl_vat",
         translation_key="spot_price_incl_vat",
         native_unit_of_measurement="kr/kWh",
-        icon="mdi:cash-clock",
+        icon="mdi:cash",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
+        # Current hour's bucket from the price list (it has a preliminary
+        # fallback); otherwise the main poll's current price.
         value_fn=lambda d: _round(
-            consumer_price(
+            d.get("consumer_price_now")
+            if d.get("consumer_price_now") is not None
+            else consumer_price(
                 d.get("spot_price")
                 if d.get("spot_price") is not None
                 else d.get("spot_price_preliminary"),
@@ -428,14 +416,6 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
             ),
             4,
         ),
-    ),
-    AmperiumSensorDescription(
-        key="norgespris_minus_subsidy_month",
-        translation_key="norgespris_minus_subsidy_month",
-        native_unit_of_measurement="kr",
-        icon="mdi:scale-balance",
-        suggested_display_precision=2,
-        value_fn=lambda d: _round(d.get("norgespris_minus_subsidy_month"), 2),
     ),
     AmperiumSensorDescription(
         key="price_min_today",
@@ -552,10 +532,6 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
                 "prices_today": data.get("prices_today", []),
                 "prices_tomorrow": data.get("prices_tomorrow", []),
             }
-        if key == "norgespris_minus_subsidy":
-            return data.get("norgespris_details")
-        if key == "norgespris_minus_subsidy_month":
-            return data.get("norgespris_details_month")
         if key == "grid_gross_month":
             return data.get("grid_breakdown")
         if key == "capacity_avg_kw":
@@ -563,9 +539,17 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         if key == "capacity_avg_kw_last_month":
             return data.get("capacity_details_last_month")
         if key == "price_min_today":
-            return {"hour": data.get("price_min_hour")}
+            return {
+                "hour": data.get("price_min_hour"),
+                "consumer": data.get("price_min_consumer"),
+            }
         if key == "price_max_today":
-            return {"hour": data.get("price_max_hour")}
+            return {
+                "hour": data.get("price_max_hour"),
+                "consumer": data.get("price_max_consumer"),
+            }
+        if key == "price_avg_today":
+            return {"consumer": data.get("price_avg_consumer")}
         return None
 
 

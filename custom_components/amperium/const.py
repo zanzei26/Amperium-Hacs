@@ -39,6 +39,11 @@ SCHEME_NORGESPRIS = "norgespris"
 SCHEME_SUBSIDY = "subsidy"
 SCHEMES = [SCHEME_NORGESPRIS, SCHEME_SUBSIDY]
 
+# Optional existing Home Assistant power sensor (e.g. Tibber Pulse/Watty) for
+# live power and the running hourly average. Must measure the whole house for
+# the capacity charge to make sense; a charger like Easee does not.
+CONF_POWER_ENTITY = "power_entity"
+
 # Hours (local time) counted as "day" for the day/night consumption split.
 # Configurable in the integration options. Weekends are not treated specially.
 CONF_DAY_START = "day_start"

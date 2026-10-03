@@ -150,6 +150,12 @@
       },
       "net_cost_month": {
         "name": "Netto kostnad denne måneden (ca.)"
+      },
+      "live_power": {
+        "name": "Effekt nå (live)"
+      },
+      "hour_power_forecast": {
+        "name": "Timeeffekt denne timen (prognose)"
       }
     },
     "binary_sensor": {
@@ -166,7 +172,11 @@
         "data": {
           "day_start": "Dag starter (time, 0-23)",
           "day_end": "Dag slutter (time, 1-24)",
-          "scheme": "Ordning"
+          "scheme": "Ordning",
+          "power_entity": "Effektsensor (valgfri)"
+        },
+        "data_description": {
+          "power_entity": "Valgfri. Velg en sensor med hele husets effekt, for eksempel Tibber Pulse/Watty. Brukes til live effekt og prognose for timesnittet. En lader som Easee viser bare laderens effekt og passer ikke."
         }
       }
     },

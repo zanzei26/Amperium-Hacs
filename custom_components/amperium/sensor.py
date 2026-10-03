@@ -12,13 +12,13 @@ from homeassistant.components.sensor import (
     SensorStateClass,
 )
 from homeassistant.const import EntityCategory, UnitOfEnergy, UnitOfPower
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import AmperiumConfigEntry
-from .const import CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
+from .const import CONF_POWER_ENTITY, CONF_SITE_ID, CONF_SITE_NAME, DOMAIN
 from .coordinator import AmperiumCoordinator
 from .derived import (
     SIGNAL_STATES,
@@ -27,6 +27,7 @@ from .derived import (
     han_signal_state,
     net_amount,
 )
+from .live import LivePowerTracker
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -356,9 +357,18 @@ async def async_setup_entry(
 ) -> None:
     """Set up Amperium sensors from a config entry."""
     coordinator = entry.runtime_data
-    async_add_entities(
+    entities: list[SensorEntity] = [
         AmperiumSensor(coordinator, entry, description) for description in SENSORS
-    )
+    ]
+
+    power_entity = entry.options.get(CONF_POWER_ENTITY)
+    if power_entity:
+        tracker = LivePowerTracker(hass, power_entity)
+        entry.async_on_unload(tracker.async_start())
+        entities.append(AmperiumLivePowerSensor(tracker, entry, "live_power"))
+        entities.append(AmperiumLivePowerSensor(tracker, entry, "hour_power_forecast"))
+
+    async_add_entities(entities)
 
 
 class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
@@ -422,3 +432,63 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         if key == "price_max_today":
             return {"hour": data.get("price_max_hour")}
         return None
+
+
+class AmperiumLivePowerSensor(SensorEntity):
+    """Live power, or the forecast average for the current hour.
+
+    Both come from a Home Assistant power sensor the user chose (not from
+    Amperium, which only reports power once per hour).
+    """
+
+    _attr_has_entity_name = True
+    _attr_should_poll = False
+    _attr_device_class = SensorDeviceClass.POWER
+    _attr_native_unit_of_measurement = UnitOfPower.KILO_WATT
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_suggested_display_precision = 2
+    _unrecorded_attributes = frozenset({"source", "hour_start"})
+
+    def __init__(
+        self, tracker: LivePowerTracker, entry: AmperiumConfigEntry, kind: str
+    ) -> None:
+        """Initialise the sensor ("live_power" or "hour_power_forecast")."""
+        self._tracker = tracker
+        self._kind = kind
+        self._attr_translation_key = kind
+        site_id = entry.data[CONF_SITE_ID]
+        site_name = entry.data.get(CONF_SITE_NAME) or f"Site {site_id}"
+        self._attr_unique_id = f"{entry.entry_id}_{kind}"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, str(site_id))},
+            name=f"Amperium {site_name}",
+            manufacturer="Amperium",
+            model="HAN / kraftlag",
+        )
+
+    async def async_added_to_hass(self) -> None:
+        """Update whenever the source sensor changes."""
+        self.async_on_remove(self._tracker.add_listener(self._handle_update))
+
+    @callback
+    def _handle_update(self) -> None:
+        self.async_write_ha_state()
+
+    @property
+    def native_value(self) -> float | None:
+        """Return power now, or the forecast hour average, in kW."""
+        snap = self._tracker.snapshot()
+        value = snap["kw"] if self._kind == "live_power" else snap["forecast_kw"]
+        return None if value is None else round(value, 3)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Show the source sensor and, for the forecast, how it is derived."""
+        attrs: dict[str, Any] = {"source": self._tracker.entity_id}
+        if self._kind == "hour_power_forecast":
+            snap = self._tracker.snapshot()
+            average = snap["average_so_far_kw"]
+            attrs["average_so_far_kw"] = None if average is None else round(average, 3)
+            attrs["coverage"] = round(snap["coverage"], 2)
+            attrs["hour_start"] = snap["hour_start"].isoformat()
+        return attrs

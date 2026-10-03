@@ -150,6 +150,12 @@
       },
       "net_cost_month": {
         "name": "Net cost this month (approx.)"
+      },
+      "live_power": {
+        "name": "Power now (live)"
+      },
+      "hour_power_forecast": {
+        "name": "Hour power this hour (forecast)"
       }
     },
     "binary_sensor": {
@@ -166,7 +172,11 @@
         "data": {
           "day_start": "Day starts (hour, 0-23)",
           "day_end": "Day ends (hour, 1-24)",
-          "scheme": "Scheme"
+          "scheme": "Scheme",
+          "power_entity": "Power sensor (optional)"
+        },
+        "data_description": {
+          "power_entity": "Optional. Pick a sensor with the whole house's power, e.g. Tibber Pulse/Watty. Used for live power and a forecast of this hour's average. A charger such as Easee only shows the charger's power and does not fit."
         }
       }
     },

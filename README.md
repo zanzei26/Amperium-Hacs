@@ -69,6 +69,15 @@ Noen ting å vite:
 
 «Forbruk siste time» har attributtet `consumption_today` (en rad per hele time i dag), og «Spotpris nå» har `prices_today`. Eksempelet [`examples/lovelace-forbruk-og-pris.yaml`](examples/lovelace-forbruk-og-pris.yaml) viser forbruk som søyler og pris som linje med HACS-kortet apexcharts-card. Eksempelet er ikke testet.
 
+### Live effekt fra en sensor du allerede har (valgfritt)
+
+Amperium oppdaterer effekt bare én gang i timen. Under **Konfigurer** kan du velge en eksisterende effektsensor i Home Assistant, for eksempel **Tibber Pulse/Watty**. Da får du to ekstra sensorer:
+
+- **Effekt nå (live)**: speiler sensoren din, omregnet til kW (W, kW og MW støttes).
+- **Timeeffekt denne timen (prognose)**: kapasitetsleddet bygger på snittet av hver hele time, ikke på øyeblikkseffekt. Sensoren regner ut timesnittet så langt (tidsvektet) og anslår hvor timen ender hvis effekten holder seg. Attributtene viser snittet så langt og hvor stor del av timen som hadde målinger (`coverage`).
+
+Velg en sensor som måler **hele huset**. En lader som Easee viser bare laderens effekt og passer ikke til kapasitetsleddet. Prognosen starter på nytt hvis Home Assistant startes midt i en time. Da regnes den ut fra målingene som finnes, og `coverage` viser det.
+
 ### Kostnad: brutto, støtte og netto
 
 Amperium oppgir kostnaden i flere deler, og de må ikke blandes:

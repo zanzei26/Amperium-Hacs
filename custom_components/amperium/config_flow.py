@@ -10,6 +10,8 @@ from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResu
 from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.selector import (
+    EntitySelector,
+    EntitySelectorConfig,
     SelectSelector,
     SelectSelectorConfig,
     SelectSelectorMode,
@@ -26,6 +28,7 @@ from .const import (
     CONF_DAY_END,
     CONF_DAY_START,
     CONF_PHONE,
+    CONF_POWER_ENTITY,
     CONF_REFRESH_TOKEN,
     CONF_SCHEME,
     CONF_SITE_ID,
@@ -215,6 +218,12 @@ class AmperiumOptionsFlow(OptionsFlow):
                     vol.Required(
                         CONF_SCHEME, default=current.get(CONF_SCHEME, vol.UNDEFINED)
                     ): _scheme_selector(),
+                    vol.Optional(
+                        CONF_POWER_ENTITY,
+                        description={"suggested_value": current.get(CONF_POWER_ENTITY)},
+                    ): EntitySelector(
+                        EntitySelectorConfig(domain="sensor", device_class="power")
+                    ),
                     vol.Required(
                         CONF_DAY_START,
                         default=current.get(CONF_DAY_START, DEFAULT_DAY_START),

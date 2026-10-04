@@ -1100,3 +1100,131 @@ def test_a_single_failure_is_logged_quietly_and_a_repeated_one_as_a_warning(capl
         _run_feed(client, consume, stop_after_sleeps=2)
     levels = [r.levelname for r in caplog.records if "live feed" in r.getMessage()]
     assert levels == ["INFO", "WARNING"]
+
+
+# --- "Spotpris nå" was unknown after midnight: no official price yet (4 October 2026) -------
+def _local_day_buckets(day, prelim_by_utc_hour=None, official=None):
+    """Hourly price buckets for one Europe/Oslo day, shaped like the API answer, then normalised."""
+    start = dt.datetime.combine(day, dt.time.min, tzinfo=OSLO)
+    end = dt.datetime.combine(day + dt.timedelta(days=1), dt.time.min, tzinfo=OSLO)
+    first, last = start.astimezone(UTC), end.astimezone(UTC)
+    buckets, t = [], first
+    while t < last:
+        price = (prelim_by_utc_hour or {}).get(t.hour, 1.0 + t.hour * 0.001)
+        buckets.append(api._normalise_price({
+            "startTime": t.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "endTime": (t + dt.timedelta(hours=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "spotPreliminary": price,
+            "spotOfficial": official,
+            "surcharge": 0.0392,
+            "salesTaxPercentage": 25,
+        }))
+        t += dt.timedelta(hours=1)
+    return buckets
+
+
+INCIDENT_DAY = dt.date(2026, 10, 4)           # summer time (UTC+2); all hours official=False
+INCIDENT_PRICES = {13: 1.04544}               # 13:00-14:00 UTC, as in the report
+
+
+def _old_sensor_value(data):
+    """What the sensor showed before the fix: only the official price from /api/sites."""
+    return data.get("spot_price")
+
+
+def test_reproduces_the_report_unknown_right_after_midnight_in_summer_time():
+    buckets = _local_day_buckets(INCIDENT_DAY, INCIDENT_PRICES)
+    assert all(b["official"] is False for b in buckets)       # as in the report
+    # 00:05 local on 4 October is 22:05 UTC on 3 October.
+    now = dt.datetime(2026, 10, 3, 22, 5, tzinfo=UTC)
+    data = {"spot_price": None, "spot_price_preliminary": None,
+            "price_bucket_now": derived.current_price_bucket(buckets, now)}
+    assert _old_sensor_value(data) is None                    # the bug: state unknown
+    value, official = derived.current_spot_price(
+        data["spot_price"], data["price_bucket_now"], data["spot_price_preliminary"])
+    assert value == pytest.approx(1.0 + 22 * 0.001)           # the price of 22:00-23:00 UTC
+    assert official is False
+
+
+def test_reproduces_the_reported_hour_value_and_consumer_price():
+    buckets = _local_day_buckets(INCIDENT_DAY, INCIDENT_PRICES)
+    now = dt.datetime(2026, 10, 4, 13, 30, tzinfo=UTC)         # 15:30 local
+    bucket = derived.current_price_bucket(buckets, now)
+    assert bucket["start"] == "2026-10-04T13:00:00Z" and bucket["end"] == "2026-10-04T14:00:00Z"
+    assert bucket["official"] is False
+    assert bucket["spot"] == 1.04544
+    assert bucket["consumer"] == pytest.approx(1.3558, abs=1e-4)
+    assert derived.current_spot_price(None, bucket, None) == (1.04544, False)
+
+
+@pytest.mark.parametrize("day,hours", [
+    (dt.date(2026, 10, 4), 24),     # ordinary summer-time day (the report)
+    (dt.date(2026, 12, 5), 24),     # ordinary winter-time day
+    (dt.date(2026, 10, 25), 25),    # clocks go back: 25 hours
+    (dt.date(2026, 3, 29), 23),     # clocks go forward: 23 hours
+])
+def test_current_hour_is_found_for_every_instant_of_a_local_day(day, hours):
+    buckets = _local_day_buckets(day)
+    assert len(buckets) == hours
+    for bucket in buckets:
+        start = dt.datetime.fromisoformat(bucket["start"].replace("Z", "+00:00"))
+        for offset in (0, 1, 1799, 3599):   # first second, a bit later, mid hour, last second
+            found = derived.current_price_bucket(buckets, start + dt.timedelta(seconds=offset))
+            assert found is bucket
+
+
+@pytest.mark.parametrize("day,first_utc", [
+    (dt.date(2026, 10, 4), "2026-10-03T22:00:00Z"),    # midnight local = 22:00 UTC (summer)
+    (dt.date(2026, 12, 5), "2026-12-04T23:00:00Z"),    # midnight local = 23:00 UTC (winter)
+])
+def test_the_first_minutes_after_local_midnight_use_the_first_bucket(day, first_utc):
+    buckets = _local_day_buckets(day)
+    assert buckets[0]["start"] == first_utc
+    first = dt.datetime.fromisoformat(first_utc.replace("Z", "+00:00"))
+    for minutes in (0, 1, 5, 59):
+        assert derived.current_price_bucket(buckets, first + dt.timedelta(minutes=minutes)) is buckets[0]
+    # the minute before midnight local still belongs to the previous day's list
+    assert derived.current_price_bucket(buckets, first - dt.timedelta(minutes=1)) is None
+
+
+def test_the_clock_change_hour_is_found_twice_in_local_time_but_is_two_different_buckets():
+    """25 October 2026: 02:30 local happens twice (00:30 UTC and 01:30 UTC)."""
+    buckets = _local_day_buckets(dt.date(2026, 10, 25))
+    first = derived.current_price_bucket(buckets, dt.datetime(2026, 10, 25, 0, 30, tzinfo=UTC))
+    second = derived.current_price_bucket(buckets, dt.datetime(2026, 10, 25, 1, 30, tzinfo=UTC))
+    assert first is not second
+    assert first["start"] == "2026-10-25T00:00:00Z" and second["start"] == "2026-10-25T01:00:00Z"
+
+
+def test_a_bucket_ends_exclusive_and_the_list_end_gives_none():
+    buckets = _local_day_buckets(INCIDENT_DAY)
+    boundary = dt.datetime(2026, 10, 4, 13, 0, tzinfo=UTC)
+    assert derived.current_price_bucket(buckets, boundary)["start"] == "2026-10-04T13:00:00Z"
+    assert derived.current_price_bucket(buckets, boundary - dt.timedelta(seconds=1))["start"] == "2026-10-04T12:00:00Z"
+    assert derived.current_price_bucket(buckets, dt.datetime(2026, 10, 4, 22, 0, tzinfo=UTC)) is None
+
+
+def test_bad_buckets_are_skipped_not_fatal():
+    good = _local_day_buckets(INCIDENT_DAY)[5]
+    now = dt.datetime.fromisoformat(good["start"].replace("Z", "+00:00")) + dt.timedelta(minutes=10)
+    junk = [None, "x", {}, {"start": None, "end": None}, {"start": "no", "end": "date"}, good]
+    assert derived.current_price_bucket(junk, now) is good
+    assert derived.current_price_bucket(None, now) is None
+    assert derived.current_price_bucket([], now) is None
+
+
+def test_spot_price_order_official_then_hour_then_preliminary():
+    bucket = {"spot": 1.1, "official": False}
+    assert derived.current_spot_price(0.9, bucket, 1.2) == (0.9, True)          # official wins
+    assert derived.current_spot_price(None, bucket, 1.2) == (1.1, False)        # then the hour
+    assert derived.current_spot_price(None, {"spot": 1.1, "official": True}, 1.2) == (1.1, True)
+    assert derived.current_spot_price(None, None, 1.2) == (1.2, False)          # then preliminary
+    assert derived.current_spot_price(None, {"spot": None}, 1.2) == (1.2, False)
+    assert derived.current_spot_price(None, None, None) == (None, None)
+    assert derived.current_spot_price(None, {}, None) == (None, None)
+
+
+def test_a_price_of_zero_or_negative_is_a_price():
+    assert derived.current_spot_price(0.0, None, 1.0) == (0.0, True)
+    assert derived.current_spot_price(None, {"spot": 0.0, "official": False}, 1.0) == (0.0, False)
+    assert derived.current_spot_price(None, {"spot": -0.05, "official": True}, 1.0) == (-0.05, True)

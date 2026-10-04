@@ -30,7 +30,7 @@ Sensorer per anlegg:
 | «Total brutto denne måneden» | Energi + nettleie + fastledd, før støtte (kr): «Total kostnad etter straumstøtte» + fastledd + støtten |
 | «Kapasitetsgrunnlag denne måneden» (kW) | Effekten kapasitetsleddet beregnes av, med trinnet og trinntabellen som attributter |
 | «Kapasitetsleddet denne måneden» (kr) og «Til neste kapasitetstrinn» (kW) | Beløpet for trinnet du er i, og hvor mange kW det er til neste trinn. Samme for forrige måned |
-| `sensor.*_spotpris_na` | Offisiell spotpris nå (kr/kWh), uten mva og påslag |
+| `sensor.*_spotpris_na` | Spotpris nå (kr/kWh), uten mva og påslag. Offisiell pris når den er fastsatt, ellers prisen for gjeldende time fra timelisten (foreløpig). Attributtet `official` viser hvilken |
 | «Strømpris nå inkl. påslag og mva» | Prisen du betaler per kWh nå: (spot + påslag) × (1 + mva%), med mva-satsen fra Amperium. Tas fra inneværende time i prislisten. Avledet, ikke bekreftet mot appen |
 | `sensor.*_laveste_spotpris_i_dag` | Laveste timepris i dag (kr/kWh), med timen og prisen inkl. påslag og mva (`consumer`) som attributter |
 | `sensor.*_hoyeste_spotpris_i_dag` | Høyeste timepris i dag (kr/kWh), med timen og `consumer` som attributter |
@@ -155,7 +155,7 @@ Dag/natt-forbruket for denne måneden hentes direkte fra Amperium (`gridRent.imp
 
 ### Timepriser
 
-Sensoren **Spotpris nå** har attributtene `prices_today` og `prices_tomorrow`: lister med én rad per time (`start`, `end`, `spot`, `surcharge`, `vat_percent`, `official`). Prisene for i morgen kommer rundt midten av dagen. `spot` er offisiell spotpris når den er fastsatt, ellers foreløpig pris. Hver time har også `consumer`: prisen du betaler per kWh, (spot + påslag) inkl. mva. Listene kan brukes i for eksempel ApexCharts eller automasjoner.
+Sensoren **Spotpris nå** har attributtene `official` (om prisen er offisiell eller foreløpig), `prices_today` og `prices_tomorrow`: lister med én rad per time (`start`, `end`, `spot`, `surcharge`, `vat_percent`, `official`). Prisene for i morgen kommer rundt midten av dagen. `spot` er offisiell spotpris når den er fastsatt, ellers foreløpig pris. Hver time har også `consumer`: prisen du betaler per kWh, (spot + påslag) inkl. mva. Listene kan brukes i for eksempel ApexCharts eller automasjoner.
 
 ## Installasjon (HACS)
 

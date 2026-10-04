@@ -88,6 +88,52 @@ def days_until(timestamp: Any, now: dt.datetime) -> float | None:
     return (when - now).total_seconds() / 86400
 
 
+def _parse_iso(value: Any) -> dt.datetime | None:
+    """Parse an ISO-8601 timestamp into an aware datetime (naive counts as UTC)."""
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = dt.datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo is not None else parsed.replace(tzinfo=dt.timezone.utc)
+
+
+def current_price_bucket(buckets: Any, now: dt.datetime) -> dict[str, Any] | None:
+    """The hourly price bucket that contains ``now``, or None.
+
+    The buckets carry UTC start/end times and ``now`` is an aware datetime, so the
+    comparison is between instants: the local day boundary and summer/winter time
+    cannot shift it. A bucket runs from its start up to, but not including, its end.
+    """
+    for bucket in buckets or []:
+        if not isinstance(bucket, dict):
+            continue
+        start, end = _parse_iso(bucket.get("start")), _parse_iso(bucket.get("end"))
+        if start is not None and end is not None and start <= now < end:
+            return bucket
+    return None
+
+
+def current_spot_price(
+    official: Any, bucket: dict[str, Any] | None, preliminary: Any
+) -> tuple[float | None, bool | None]:
+    """The spot price to show as "now", and whether it is the official one.
+
+    Order: the official price from /api/sites, then the price of the current hour in
+    the hourly list (official, or preliminary until it is fixed), then the preliminary
+    price from /api/sites. Amperium has no official price for the hours right after
+    midnight, and the sensor must still show a price then.
+    """
+    if official is not None:
+        return float(official), True
+    if isinstance(bucket, dict) and bucket.get("spot") is not None:
+        return float(bucket["spot"]), bool(bucket.get("official"))
+    if preliminary is not None:
+        return float(preliminary), False
+    return None, None
+
+
 def consumer_price(spot: Any, surcharge: Any, vat_percent: Any) -> float | None:
     """Price per kWh the consumer pays: (spot + surcharge) incl. VAT.
 

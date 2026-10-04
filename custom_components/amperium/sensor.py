@@ -38,6 +38,7 @@ from .derived import (
     SIGNAL_STATES,
     ChangeGate,
     choose_power_now,
+    current_spot_price,
     compensation_difference,
     compensation_for_scheme,
     consumer_price,
@@ -121,7 +122,12 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         icon="mdi:chart-line",
         state_class=SensorStateClass.MEASUREMENT,
         suggested_display_precision=3,
-        value_fn=lambda d: _round(d.get("spot_price"), 4),
+        value_fn=lambda d: _round(
+            current_spot_price(
+                d.get("spot_price"), d.get("price_bucket_now"), d.get("spot_price_preliminary")
+            )[0],
+            4,
+        ),
     ),
     AmperiumSensorDescription(
         key="energy_yesterday",
@@ -669,6 +675,13 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
             # Hourly buckets (start/end/spot/surcharge/vat_percent) for use in
             # e.g. ApexCharts cards or automations.
             return {
+                # True when the shown price is the official one, False while it is
+                # still the preliminary price.
+                "official": current_spot_price(
+                    data.get("spot_price"),
+                    data.get("price_bucket_now"),
+                    data.get("spot_price_preliminary"),
+                )[1],
                 "prices_today": data.get("prices_today", []),
                 "prices_tomorrow": data.get("prices_tomorrow", []),
             }

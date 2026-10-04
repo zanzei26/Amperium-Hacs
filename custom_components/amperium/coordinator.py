@@ -33,6 +33,7 @@ from .const import (
 )
 from .derived import (
     capacity_peaks,
+    current_price_bucket,
     days_until,
     local_month_bounds,
     summarise_charges,
@@ -162,13 +163,10 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
             "prices_today": today,
             **summarise_prices(today),
         }
-        now_utc = dt_util.utcnow()
-        for bucket in today:
-            start = dt_util.parse_datetime(bucket["start"] or "")
-            end = dt_util.parse_datetime(bucket["end"] or "")
-            if start and end and start <= now_utc < end:
-                result["consumer_price_now"] = bucket.get("consumer")
-                break
+        bucket = current_price_bucket(today, dt_util.utcnow())
+        if bucket is not None:
+            result["consumer_price_now"] = bucket.get("consumer")
+            result["price_bucket_now"] = bucket
 
         # Tomorrow's prices are published around midday, so this may be empty.
         try:

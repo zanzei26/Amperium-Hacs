@@ -4,6 +4,14 @@ Nyeste versjon øverst. Versjonsnummeret står i `custom_components/amperium/man
 
 Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (`api.py`) har automatiske tester som kjøres uten Home Assistant (`cd tests && python -m pytest`). Sensorer, oppsettsflyt, varsler og statistikkimport er skrevet mot Home Assistants API, men er ikke kjørt i en ekte Home Assistant av den som har skrevet koden. Meld fra under Issues hvis noe ikke virker.
 
+## 0.11.4
+- **Rettet: «Spotpris nå» ble `unknown` når Amperium ikke hadde en offisiell pris.** Rapport fra Home Assistant 4. oktober 2026: etter døgnskiftet (ca. 00:00 norsk tid) hadde sensoren ingen verdi, mens `prices_today` var fullt utfylt og prisen for gjeldende time var brukbar. Alle timer hadde `official: false`. Årsaken er funnet i koden: sensoren leste bare `spotOfficial` fra `/api/sites`, og det feltet er tomt til prisen er fastsatt. Timelisten (`prices_today`) brukte derimot allerede foreløpig pris når den offisielle mangler, men det hjalp ikke sensoren. Omlasting hjalp ikke, fordi dataene fra Amperium var de samme.
+- **Slik velges prisen nå:** den offisielle prisen fra `/api/sites` hvis den finnes, ellers prisen for gjeldende time i timelisten (offisiell, eller foreløpig til den er fastsatt), ellers foreløpig pris fra `/api/sites`. Sensoren er bare tom hvis ingen av dem finnes. Nytt attributt `official` på sensoren: `true` for offisiell pris, `false` mens den er foreløpig.
+- **Tidssone og sommertid er ikke årsaken.** Oppslaget av gjeldende time sammenligner UTC-tidspunkter (timelistene har start og slutt i UTC), så døgnskiftet og klokkeomstillingen kan ikke forskyve det. Det er testet for døgnskifte i sommertid og vintertid og for døgn med 23 og 25 timer.
+- Andre sensorer er uendret. «Strømpris nå inkl. påslag og mva» brukte allerede foreløpig pris og bruker samme oppslag av gjeldende time som før.
+- Ikke testet i Home Assistant ennå: at «Spotpris nå» får verdi mens prisen er foreløpig. Se at sensoren har en verdi (ca. samme tall som `spot` for gjeldende time i `prices_today`) og at `official` står som `false` så lenge Amperium ikke har fastsatt prisen.
+- 13 nye tester (139 totalt): gjengivelse av rapporten, oppslag av time rundt døgnskiftet i sommer- og vintertid, døgn med 23 og 25 timer, intervallgrenser og rekkefølgen på prisene. Token- og innloggingskoden er uendret.
+
 ## 0.11.3
 - **Gammel feilmelding blir ikke stående.** Etter en kortvarig feil, for eksempel en `TimeoutError` under oppstart før nettverket er klart, sto `last_error` igjen på «Effekt nå (Amperium live)» i minutter etter at strømmen virket igjen. Nå nullstilles `last_error` når nye målinger kommer, så attributtet bare viser et problem som pågår. Nytt attributt `last_error_at` viser når siste feil skjedde.
 - En feil uten tekst vises som «TimeoutError (no details)» i stedet for «TimeoutError: ».

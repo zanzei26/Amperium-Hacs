@@ -54,21 +54,27 @@ def _metadata(
 
 
 async def _base_sum(hass: HomeAssistant, statistic_id: str, first: dt.datetime) -> float:
-    """Return the sum of the last stored row before ``first`` (0 if none)."""
-    rows = await get_instance(hass).async_add_executor_job(
-        statistics_during_period,
-        hass,
-        first - dt.timedelta(days=7),
-        first,
-        {statistic_id},
-        "hour",
-        None,
-        {"sum"},
-    )
-    stored = rows.get(statistic_id) or []
-    if not stored:
-        return 0.0
-    return float(stored[-1].get("sum") or 0.0)
+    """Return the sum of the last stored row before ``first`` (0 if none).
+
+    Looks back a week first (cheap); only when that window is empty, e.g.
+    after Home Assistant was off for weeks, it searches further back so the
+    running sum continues instead of starting again from zero.
+    """
+    for days in (7, 800):
+        rows = await get_instance(hass).async_add_executor_job(
+            statistics_during_period,
+            hass,
+            first - dt.timedelta(days=days),
+            first,
+            {statistic_id},
+            "hour",
+            None,
+            {"sum"},
+        )
+        stored = rows.get(statistic_id) or []
+        if stored:
+            return float(stored[-1].get("sum") or 0.0)
+    return 0.0
 
 
 async def _import_series(

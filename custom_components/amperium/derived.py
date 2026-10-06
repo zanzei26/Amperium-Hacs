@@ -234,6 +234,22 @@ def summarise_energy(
     return out
 
 
+def _capacity_threshold(
+    best: dict[dt.date, dict[str, Any]], today: dt.date, count: int
+) -> float:
+    """What an hour today must exceed to raise the capacity average.
+
+    Today's own peak counts once: if it is already among the top days, any
+    hour above it raises the average; otherwise an hour must beat the
+    ``count``-th highest peak of the other days.
+    """
+    today_kw = best[today]["kw"] if today in best else 0.0
+    others = sorted((p["kw"] for d, p in best.items() if d != today), reverse=True)
+    if len(others) < count:
+        return today_kw
+    return max(today_kw, others[count - 1])
+
+
 def capacity_peaks(
     buckets: list[dict[str, Any]], now: dt.datetime, tz: dt.tzinfo, count: int = 3
 ) -> dict[str, Any]:
@@ -269,7 +285,7 @@ def capacity_peaks(
         "capacity_calc_kw": sum(p["kw"] for p in ranked) / len(ranked),
         # What a new day's peak must exceed to enter the top three (0 while
         # fewer than three days have data).
-        "capacity_threshold_kw": ranked[-1]["kw"] if len(ranked) == count else 0.0,
+        "capacity_threshold_kw": _capacity_threshold(best, now_local.date(), count),
         "capacity_peaks": ranked,
         "capacity_peak_days": len(best),
     }

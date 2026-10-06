@@ -171,6 +171,21 @@ def test_capacity_peaks_use_three_different_days():
     assert out["capacity_peaks"][0]["date"] == "2026-10-01"
 
 
+def test_capacity_threshold_counts_today_once():
+    from zoneinfo import ZoneInfo
+
+    tz = ZoneInfo("Europe/Oslo")
+    now = dt.datetime(2026, 10, 10, 12, tzinfo=UTC)
+    # today (10th) already at 6.0 and in the top three: only an hour above
+    # today's own peak raises the average, not one above the third day (4.0)
+    buckets = _hours({(1, 8): 5.0, (2, 8): 4.0, (3, 8): 1.0, (10, 9): 6.0})
+    out = derived.capacity_peaks(buckets, now, tz)
+    assert out["capacity_threshold_kw"] == 6.0
+    # today below the others: it must beat the third highest other day
+    buckets = _hours({(1, 8): 5.0, (2, 8): 4.0, (3, 8): 3.5, (10, 9): 2.0})
+    assert derived.capacity_peaks(buckets, now, tz)["capacity_threshold_kw"] == 3.5
+
+
 def test_capacity_peaks_with_fewer_than_three_days():
     from zoneinfo import ZoneInfo
 

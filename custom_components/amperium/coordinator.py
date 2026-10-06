@@ -53,6 +53,7 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         super().__init__(
             hass,
             _LOGGER,
+            config_entry=entry,
             name=DOMAIN,
             update_interval=timedelta(seconds=DEFAULT_SCAN_INTERVAL),
         )
@@ -60,6 +61,9 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         self._site_id = entry.data[CONF_SITE_ID]
         self._extended: dict[str, Any] = {}
         self._extended_at: datetime | None = None
+        # (year, month) the extended values belong to; a new month starts empty
+        # so last month's peaks and totals are not shown as this month's.
+        self._extended_month: tuple[int, int] | None = None
         # Used to tell a real options change from a token-only entry update.
         self.options_snapshot = dict(entry.options)
         session = async_get_clientsession(hass)
@@ -250,6 +254,11 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         except Exception:  # noqa: BLE001 - statistics are optional
             _LOGGER.warning("Could not import statistics", exc_info=True)
 
+        local_now = now.astimezone(tz)
+        month = (local_now.year, local_now.month)
+        if month != self._extended_month:
+            self._extended = {}
+            self._extended_month = month
         self._extended.update(new)
         if energy_ok:
             self._extended_at = now

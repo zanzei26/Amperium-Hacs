@@ -124,8 +124,9 @@ class AmperiumClient:
                     except (aiohttp.ContentTypeError, ValueError):
                         data = None
                 return resp.status, data
-        except aiohttp.ClientError as err:
-            raise AmperiumError(f"Network error: {err}") from err
+        except (aiohttp.ClientError, TimeoutError) as err:
+            # A request timeout raises TimeoutError, which is no ClientError.
+            raise AmperiumError(f"Network error: {err or 'timeout'}") from err
 
     # ------------------------------------------------------------------ #
     # Authentication

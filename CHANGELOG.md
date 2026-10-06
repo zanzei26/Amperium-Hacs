@@ -4,6 +4,15 @@ Nyeste versjon øverst. Versjonsnummeret står i `custom_components/amperium/man
 
 Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (`api.py`) har automatiske tester som kjøres uten Home Assistant (`cd tests && python -m pytest`). Sensorer, oppsettsflyt, varsler og statistikkimport er skrevet mot Home Assistants API, men er ikke kjørt i en ekte Home Assistant av den som har skrevet koden. Meld fra under Issues hvis noe ikke virker.
 
+## 0.11.5
+- **Rettet: tidsavbrudd gjorde alle sensorene utilgjengelige.** Når et kall til Amperium tok mer enn 30 sekunder, kom feilen ut som `TimeoutError`, som ikke ble fanget opp som nettverksfeil. Da feilet hele oppdateringen, også når det bare var pris eller utvidede data som var trege. Nå håndteres tidsavbrudd som andre nettverksfeil.
+- **Rettet: månedssummer ga store negative hopp i statistikken.** «Forbruk denne måneden», kostnadssensorene og eksportsensorene er totaler som starter på null igjen hver måned (eksport i dag: hver natt), men manglet `last_reset`. Home Assistant så derfor nullstillingen som et stort negativt forbruk. Nå oppgir sensorene starten på måneden/døgnet som `last_reset`.
+- **Rettet: terskel for neste kapasitetstrinn telte dagens topp to ganger.** Når dagens høyeste time allerede var blant de tre høyeste dagene, viste `capacity_threshold_kw` den tredje dagen i stedet for dagens topp, så en time kunne meldes «over terskelen» uten at snittet endret seg. Med færre enn tre dager er terskelen nå dagens topp (0 hvis dagen ikke har data ennå).
+- **Rettet: forrige måneds kapasitetstall ble stående etter månedsskiftet** i opptil en time. Utvidede data tømmes nå når måneden skifter.
+- **Rettet: statistikksummen kunne starte på 0 igjen** hvis det ikke fantes lagret statistikk den siste uken før importen (f.eks. etter at Home Assistant har vært av i flere uker). Nå letes det lenger tilbake før summen settes til 0.
+- Koordinatoren får config-entry direkte, slik nyere Home Assistant krever.
+- Ikke testet i Home Assistant ennå. 1 ny test (140 totalt).
+
 ## 0.11.4
 - **Rettet: «Spotpris nå» ble `unknown` når Amperium ikke hadde en offisiell pris.** Rapport fra Home Assistant 4. oktober 2026: etter døgnskiftet (ca. 00:00 norsk tid) hadde sensoren ingen verdi, mens `prices_today` var fullt utfylt og prisen for gjeldende time var brukbar. Alle timer hadde `official: false`. Årsaken er funnet i koden: sensoren leste bare `spotOfficial` fra `/api/sites`, og det feltet er tomt til prisen er fastsatt. Timelisten (`prices_today`) brukte derimot allerede foreløpig pris når den offisielle mangler, men det hjalp ikke sensoren. Omlasting hjalp ikke, fordi dataene fra Amperium var de samme.
 - **Slik velges prisen nå:** den offisielle prisen fra `/api/sites` hvis den finnes, ellers prisen for gjeldende time i timelisten (offisiell, eller foreløpig til den er fastsatt), ellers foreløpig pris fra `/api/sites`. Sensoren er bare tom hvis ingen av dem finnes. Nytt attributt `official` på sensoren: `true` for offisiell pris, `false` mens den er foreløpig.

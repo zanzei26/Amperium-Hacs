@@ -1,6 +1,7 @@
 """Sensor platform for Amperium."""
 from __future__ import annotations
 
+import datetime
 import functools
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -58,11 +59,16 @@ class AmperiumSensorDescription(SensorEntityDescription):
     """Describes an Amperium sensor."""
 
     value_fn: Callable[[dict[str, Any]], Any]
+    # "month" or "day": the value starts again from zero then. Reported as
+    # last_reset so a TOTAL sensor's statistics don't book the drop at the
+    # reset as a large negative change.
+    reset: str | None = None
 
 
 SENSORS: tuple[AmperiumSensorDescription, ...] = (
     AmperiumSensorDescription(
         key="energy_month",
+        reset="month",
         translation_key="energy_month",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
@@ -90,6 +96,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
     ),
     AmperiumSensorDescription(
         key="cost_total",
+        reset="month",
         translation_key="cost_total",
         native_unit_of_measurement="kr",
         icon="mdi:cash-multiple",
@@ -99,6 +106,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
     ),
     AmperiumSensorDescription(
         key="cost_energy",
+        reset="month",
         translation_key="cost_energy",
         native_unit_of_measurement="kr",
         icon="mdi:cash",
@@ -108,6 +116,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
     ),
     AmperiumSensorDescription(
         key="cost_grid_rent",
+        reset="month",
         translation_key="cost_grid_rent",
         native_unit_of_measurement="kr",
         icon="mdi:transmission-tower",
@@ -171,6 +180,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
     ),
     AmperiumSensorDescription(
         key="energy_export_month",
+        reset="month",
         translation_key="energy_export_month",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
@@ -181,6 +191,7 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
     ),
     AmperiumSensorDescription(
         key="energy_export_today",
+        reset="day",
         translation_key="energy_export_today",
         native_unit_of_measurement=UnitOfEnergy.KILO_WATT_HOUR,
         device_class=SensorDeviceClass.ENERGY,
@@ -652,6 +663,15 @@ class AmperiumSensor(CoordinatorEntity[AmperiumCoordinator], SensorEntity):
         if not self.coordinator.data:
             return None
         return self.entity_description.value_fn(self.coordinator.data)
+
+    @property
+    def last_reset(self) -> datetime.datetime | None:
+        """Start of the current local month or day for sensors that reset."""
+        reset = self.entity_description.reset
+        if reset is None:
+            return None
+        start = dt_util.start_of_local_day()
+        return start.replace(day=1) if reset == "month" else start
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:

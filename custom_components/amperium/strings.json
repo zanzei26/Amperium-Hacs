@@ -207,6 +207,9 @@
       "capacity_threshold_kw": {
         "name": "Threshold for a new capacity peak"
       },
+      "login_renews_at": {
+        "name": "Login renews at"
+      },
       "login_valid_until": {
         "name": "Login valid until"
       },

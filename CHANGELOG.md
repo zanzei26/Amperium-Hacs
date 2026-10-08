@@ -4,6 +4,11 @@ Nyeste versjon øverst. Versjonsnummeret står i `custom_components/amperium/man
 
 Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (`api.py`) har automatiske tester som kjøres uten Home Assistant (`cd tests && python -m pytest`). Sensorer, oppsettsflyt, varsler og statistikkimport er skrevet mot Home Assistants API, men er ikke kjørt i en ekte Home Assistant av den som har skrevet koden. Meld fra under Issues hvis noe ikke virker.
 
+## 0.11.6
+- **Ny sensor: «Innlogging fornyes».** Viser når gjeldende innlogging (access-token) går ut og integrasjonen automatisk fornyer den med refresh-tokenet.
+- **Kjent: «Innlogging gyldig til» kan stå som ukjent.** Den viser når refresh-tokenet går ut, men Amperium sender ikke alltid den datoen ved innlogging. Varselet om ny innlogging bruker fortsatt denne datoen når den finnes.
+- Ingen endring i token-håndteringen.
+
 ## 0.11.5
 - **Rettet: tidsavbrudd gjorde alle sensorene utilgjengelige.** Når et kall til Amperium tok mer enn 30 sekunder, kom feilen ut som `TimeoutError`, som ikke ble fanget opp som nettverksfeil. Da feilet hele oppdateringen, også når det bare var pris eller utvidede data som var trege. Nå håndteres tidsavbrudd som andre nettverksfeil.
 - **Rettet: månedssummer ga store negative hopp i statistikken.** «Forbruk denne måneden», kostnadssensorene og eksportsensorene er totaler som starter på null igjen hver måned (eksport i dag: hver natt), men manglet `last_reset`. Home Assistant så derfor nullstillingen som et stort negativt forbruk. Nå oppgir sensorene starten på måneden/døgnet som `last_reset`.

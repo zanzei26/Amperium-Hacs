@@ -448,6 +448,14 @@ SENSORS: tuple[AmperiumSensorDescription, ...] = (
         value_fn=lambda d: d.get("login_valid_until"),
     ),
     AmperiumSensorDescription(
+        key="login_renews_at",
+        translation_key="login_renews_at",
+        device_class=SensorDeviceClass.TIMESTAMP,
+        icon="mdi:key-change",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda d: d.get("login_renews_at"),
+    ),
+    AmperiumSensorDescription(
         key="han_signal_quality",
         translation_key="han_signal_quality",
         device_class=SensorDeviceClass.ENUM,

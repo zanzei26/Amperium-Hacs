@@ -137,6 +137,11 @@ class AmperiumCoordinator(DataUpdateCoordinator[dict[str, Any]]):
         data["login_valid_until"] = dt_util.parse_datetime(
             self.client.refresh_expires_at or ""
         )
+        # Amperium does not always send the refresh token's expiry, so also
+        # expose when the current access token runs out and is renewed.
+        data["login_renews_at"] = dt_util.parse_datetime(
+            self.client.access_expires_at or ""
+        )
         data.update(await self._async_fetch_prices())
         data.update(await self._async_fetch_extended(bool(data.get("is_producing"))))
         self._check_login_expiry()

@@ -207,6 +207,9 @@
       "capacity_threshold_kw": {
         "name": "Terskel for ny kapasitetstopp"
       },
+      "login_renews_at": {
+        "name": "Innlogging fornyes"
+      },
       "login_valid_until": {
         "name": "Innlogging gyldig til"
       },

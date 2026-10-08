@@ -8,6 +8,7 @@ Om testing: beregningene (`derived.py`, `hourpower.py`) og token-håndteringen (
 - **Ny sensor: «Innlogging fornyes».** Viser når gjeldende innlogging (access-token) går ut og integrasjonen automatisk fornyer den med refresh-tokenet.
 - **Kjent: «Innlogging gyldig til» kan stå som ukjent.** Den viser når refresh-tokenet går ut, men Amperium sender ikke alltid den datoen ved innlogging. Varselet om ny innlogging bruker fortsatt denne datoen når den finnes.
 - Ingen endring i token-håndteringen.
+- **Bekreftet i ekte Home Assistant 8. oktober 2026:** første automatiske fornyelse gikk gjennom kl. 12:50 norsk tid, uten ny engangskode. Tilgangstokenet varer 5 døgn (nytt utløp nøyaktig 5 døgn etter fornyelsen). Svaret på fornyelsen hadde ikke utløpstid for fornyelsestokenet.
 
 ## 0.11.5
 - **Rettet: tidsavbrudd gjorde alle sensorene utilgjengelige.** Når et kall til Amperium tok mer enn 30 sekunder, kom feilen ut som `TimeoutError`, som ikke ble fanget opp som nettverksfeil. Da feilet hele oppdateringen, også når det bare var pris eller utvidede data som var trege. Nå håndteres tidsavbrudd som andre nettverksfeil.
